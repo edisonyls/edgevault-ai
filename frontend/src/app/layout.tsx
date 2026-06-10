@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "EdgeVault AI",
-  description: "",
+  description: "Upload, manage, and ask questions about finance documents.",
 };
 
 export default function RootLayout({
