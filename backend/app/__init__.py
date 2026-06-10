@@ -1,0 +1,1 @@
+"""EdgeVault FastAPI application package."""
