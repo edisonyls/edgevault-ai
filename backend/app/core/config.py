@@ -1,18 +1,26 @@
 from functools import lru_cache
+from typing import Literal
 
+from dotenv import find_dotenv
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+Environment = Literal["local", "development", "staging", "production"]
 
 
 class Settings(BaseSettings):
-    app_name: str = "EdgeVault API"
+    app_name: str = "EdgeVault AI API"
     app_version: str = "0.1.0"
-    environment: str = "development"
+    environment: Environment = Field(
+        default="development",
+        validation_alias="NODE_ENV",
+    )
     debug: bool = False
-    api_v1_prefix: str = "/api/v1"
+    api_prefix: str = "/api"
     allowed_origins: list[str] = ["http://localhost:3000"]
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=find_dotenv(usecwd=True) or None,
         env_file_encoding="utf-8",
         extra="ignore",
     )

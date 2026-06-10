@@ -16,12 +16,6 @@ uv run fastapi dev app/main.py
 
 The API is available at `http://127.0.0.1:8000`.
 
-## Test
-
-```bash
-uv run pytest
-```
-
 ## Lint
 
 ```bash
