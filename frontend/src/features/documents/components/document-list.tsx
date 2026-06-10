@@ -1,7 +1,23 @@
+import {
+  ListBox,
+  SearchField,
+  Select,
+  Surface,
+  Table,
+  Typography,
+} from "@heroui/react";
 import { IconFile, IconSearch } from "@/components/icons";
 import { DocumentRow } from "./document-row";
 import { MobileDocumentCard } from "./mobile-document-card";
 import type { DocumentType, VaultDocument } from "../types/document";
+
+const documentTypes = [
+  "All",
+  "Bill",
+  "Receipt",
+  "Invoice",
+  "Statement",
+] as const;
 
 type DocumentListProps = {
   documents: VaultDocument[];
@@ -35,93 +51,119 @@ export function DocumentList({
   onDelete,
 }: DocumentListProps) {
   return (
-    <section
+    <Surface
+      render={(props) => <section {...props} />}
       id="documents"
       className="min-w-0 border-b border-slate-200 bg-[#f7f8fb] px-5 py-5 sm:px-6 lg:px-8 xl:border-b-0 xl:border-r"
     >
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-slate-950">
-            Uploaded files
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {documents.length} of {totalDocuments} documents shown
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <label className="relative block">
-            <span className="sr-only">Search files</span>
-            <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Search files or vendors"
-              className="min-h-11 w-full rounded-md border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600 sm:w-72"
-            />
-          </label>
-
-          <label className="sr-only" htmlFor="type-filter">
-            Filter by document type
-          </label>
-          <select
-            id="type-filter"
-            value={selectedType}
-            onChange={(event) =>
-              onSelectedTypeChange(event.target.value as "All" | DocumentType)
-            }
-            className="min-h-11 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600"
+      <Surface
+        variant="transparent"
+        className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+      >
+        <Surface variant="transparent">
+          <Typography.Heading
+            level={2}
+            className="text-xl font-semibold text-slate-950"
           >
-            <option>All</option>
-            <option>Bill</option>
-            <option>Receipt</option>
-            <option>Invoice</option>
-            <option>Statement</option>
-          </select>
-        </div>
-      </div>
+            Uploaded files
+          </Typography.Heading>
+          <Typography.Paragraph className="mt-1 text-sm text-slate-500">
+            {documents.length} of {totalDocuments} documents shown
+          </Typography.Paragraph>
+        </Surface>
 
-      <div className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-              <tr>
-                <th scope="col" className="px-4 py-3">
+        <Surface
+          variant="transparent"
+          className="flex flex-col gap-3 sm:flex-row sm:items-center"
+        >
+          <SearchField
+            value={query}
+            onChange={onQueryChange}
+            aria-label="Search files"
+            className="w-full sm:w-72"
+          >
+            <SearchField.Group className="flex min-h-11 items-center rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 transition focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-600">
+              <SearchField.SearchIcon>
+                <IconSearch className="size-4 text-slate-400" />
+              </SearchField.SearchIcon>
+              <SearchField.Input
+                placeholder="Search files or vendors"
+                className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-400"
+              />
+              <SearchField.ClearButton className="text-slate-400 hover:text-slate-700" />
+            </SearchField.Group>
+          </SearchField>
+
+          <Select
+            aria-label="Filter by document type"
+            selectedKey={selectedType}
+            onSelectionChange={(key) =>
+              onSelectedTypeChange(String(key) as "All" | DocumentType)
+            }
+            className="w-full sm:w-44"
+          >
+            <Select.Trigger className="flex min-h-11 items-center justify-between rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition focus:ring-2 focus:ring-indigo-600">
+              <Select.Value />
+              <Select.Indicator className="size-4 text-slate-500" />
+            </Select.Trigger>
+            <Select.Popover className="rounded-md border border-slate-200 bg-white p-1 shadow-lg">
+              <ListBox className="outline-none">
+                {documentTypes.map((type) => (
+                  <ListBox.Item
+                    key={type}
+                    id={type}
+                    className="rounded-md px-3 py-2 text-sm text-slate-700 outline-none hover:bg-slate-100 focus:bg-slate-100"
+                  >
+                    {type}
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </Surface>
+      </Surface>
+
+      <Surface className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <Table className="hidden md:block">
+          <Table.ScrollContainer className="overflow-x-auto">
+            <Table.Content
+              aria-label="Uploaded files"
+              className="w-full min-w-[760px] border-collapse text-left text-sm"
+            >
+              <Table.Header className="bg-slate-50 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                <Table.Column isRowHeader className="px-4 py-3">
                   File
-                </th>
-                <th scope="col" className="px-4 py-3">
-                  Vendor
-                </th>
-                <th scope="col" className="px-4 py-3">
-                  Amount
-                </th>
-                <th scope="col" className="px-4 py-3">
-                  Status
-                </th>
-                <th scope="col" className="px-4 py-3 text-right">
+                </Table.Column>
+                <Table.Column className="px-4 py-3">Vendor</Table.Column>
+                <Table.Column className="px-4 py-3">Amount</Table.Column>
+                <Table.Column className="px-4 py-3">Status</Table.Column>
+                <Table.Column className="px-4 py-3 text-right">
                   Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {documents.map((document) => (
-                <DocumentRow
-                  key={document.id}
-                  document={document}
-                  isEditing={editingId === document.id}
-                  draftName={draftName}
-                  onDraftNameChange={onDraftNameChange}
-                  onStartRename={onStartRename}
-                  onSaveRename={onSaveRename}
-                  onCancelRename={onCancelRename}
-                  onDelete={onDelete}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+                </Table.Column>
+              </Table.Header>
+              <Table.Body className="divide-y divide-slate-200">
+                {documents.map((document) => (
+                  <DocumentRow
+                    key={document.id}
+                    document={document}
+                    isEditing={editingId === document.id}
+                    draftName={draftName}
+                    onDraftNameChange={onDraftNameChange}
+                    onStartRename={onStartRename}
+                    onSaveRename={onSaveRename}
+                    onCancelRename={onCancelRename}
+                    onDelete={onDelete}
+                  />
+                ))}
+              </Table.Body>
+            </Table.Content>
+          </Table.ScrollContainer>
+        </Table>
 
-        <div className="divide-y divide-slate-200 md:hidden">
+        <Surface
+          variant="transparent"
+          className="divide-y divide-slate-200 md:hidden"
+        >
           {documents.map((document) => (
             <MobileDocumentCard
               key={document.id}
@@ -135,24 +177,24 @@ export function DocumentList({
               onDelete={onDelete}
             />
           ))}
-        </div>
+        </Surface>
 
         {documents.length === 0 && <EmptyDocumentState />}
-      </div>
-    </section>
+      </Surface>
+    </Surface>
   );
 }
 
 function EmptyDocumentState() {
   return (
-    <div className="px-6 py-12 text-center">
+    <Surface variant="transparent" className="px-6 py-12 text-center">
       <IconFile className="mx-auto size-10 text-slate-400" />
-      <p className="mt-3 text-sm font-semibold text-slate-950">
+      <Typography.Paragraph className="mt-3 text-sm font-semibold text-slate-950">
         No documents match this view
-      </p>
-      <p className="mt-1 text-sm text-slate-500">
+      </Typography.Paragraph>
+      <Typography.Paragraph className="mt-1 text-sm text-slate-500">
         Clear the search or choose a different file type.
-      </p>
-    </div>
+      </Typography.Paragraph>
+    </Surface>
   );
 }

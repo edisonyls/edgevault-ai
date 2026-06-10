@@ -1,6 +1,6 @@
+import { Button, Chip, Input, Surface, Typography } from "@heroui/react";
 import { IconEdit, IconFile, IconTrash } from "@/components/icons";
 import { Detail } from "@/components/ui/detail";
-import { statusStyles, typeStyles } from "../lib/document-styles";
 import type { VaultDocument } from "../types/document";
 
 type MobileDocumentCardProps = {
@@ -25,15 +25,22 @@ export function MobileDocumentCard({
   onDelete,
 }: MobileDocumentCardProps) {
   return (
-    <article className="p-4">
-      <div className="flex gap-3">
-        <div className="grid size-10 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600">
+    <Surface
+      render={(props) => <article {...props} />}
+      variant="transparent"
+      className="p-4"
+    >
+      <Surface variant="transparent" className="flex gap-3">
+        <Surface
+          variant="transparent"
+          className="grid size-10 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600"
+        >
           <IconFile className="size-5" />
-        </div>
-        <div className="min-w-0 flex-1">
+        </Surface>
+        <Surface variant="transparent" className="min-w-0 flex-1">
           {isEditing ? (
-            <div className="space-y-2">
-              <input
+            <Surface variant="transparent" className="space-y-2">
+              <Input
                 value={draftName}
                 onChange={(event) => onDraftNameChange(event.target.value)}
                 onKeyDown={(event) => {
@@ -47,60 +54,106 @@ export function MobileDocumentCard({
                 className="min-h-11 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600"
                 autoFocus
               />
-              <button
+              <Button
                 type="button"
-                onClick={() => onSaveRename(document.id)}
+                variant="primary"
+                onPress={() => onSaveRename(document.id)}
                 className="min-h-11 w-full rounded-md bg-slate-950 px-3 text-sm font-semibold text-white transition hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-600"
               >
                 Save name
-              </button>
-            </div>
+              </Button>
+            </Surface>
           ) : (
-            <h3 className="break-words text-sm font-semibold leading-6 text-slate-950">
+            <Typography.Heading
+              level={3}
+              className="break-words text-sm font-semibold leading-6 text-slate-950"
+            >
               {document.name}
-            </h3>
+            </Typography.Heading>
           )}
-          <p className="mt-1 text-sm text-slate-500">{document.vendor}</p>
-        </div>
-      </div>
+          <Typography.Paragraph className="mt-1 text-sm text-slate-500">
+            {document.vendor}
+          </Typography.Paragraph>
+        </Surface>
+      </Surface>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+      <Surface
+        variant="transparent"
+        className="mt-4 grid grid-cols-2 gap-2 text-sm"
+      >
         <Detail label="Amount" value={document.amount} />
         <Detail label="Uploaded" value={document.uploadedAt} />
-      </div>
+      </Surface>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          <span
-            className={`rounded-md px-2 py-1 text-xs font-semibold ${typeStyles[document.type]}`}
+      <Surface
+        variant="transparent"
+        className="mt-4 flex flex-wrap items-center justify-between gap-3"
+      >
+        <Surface variant="transparent" className="flex flex-wrap gap-2">
+          <Chip
+            color={typeColor(document.type)}
+            size="sm"
+            variant="soft"
+            className="rounded-md text-xs font-semibold"
           >
             {document.type}
-          </span>
-          <span
-            className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${statusStyles[document.status]}`}
+          </Chip>
+          <Chip
+            color={statusColor(document.status)}
+            size="sm"
+            variant="soft"
+            className="rounded-md border text-xs font-semibold"
           >
             {document.status}
-          </span>
-        </div>
-        <div className="flex gap-2">
-          <button
+          </Chip>
+        </Surface>
+        <Surface variant="transparent" className="flex gap-2">
+          <Button
             type="button"
-            onClick={() => onStartRename(document)}
+            variant="outline"
+            isIconOnly
+            onPress={() => onStartRename(document)}
             aria-label={`Rename ${document.name}`}
             className="grid min-h-11 min-w-11 place-items-center rounded-md border border-slate-200 text-slate-600 transition hover:border-indigo-300 hover:text-indigo-700 focus:ring-2 focus:ring-indigo-600"
           >
             <IconEdit className="size-4" />
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            onClick={() => onDelete(document.id)}
+            variant="outline"
+            isIconOnly
+            onPress={() => onDelete(document.id)}
             aria-label={`Delete ${document.name}`}
             className="grid min-h-11 min-w-11 place-items-center rounded-md border border-slate-200 text-slate-600 transition hover:border-rose-300 hover:text-rose-700 focus:ring-2 focus:ring-rose-500"
           >
             <IconTrash className="size-4" />
-          </button>
-        </div>
-      </div>
-    </article>
+          </Button>
+        </Surface>
+      </Surface>
+    </Surface>
   );
+}
+
+function typeColor(type: VaultDocument["type"]) {
+  switch (type) {
+    case "Bill":
+      return "accent";
+    case "Invoice":
+      return "success";
+    case "Receipt":
+      return "default";
+    case "Statement":
+      return "warning";
+  }
+}
+
+function statusColor(status: VaultDocument["status"]) {
+  switch (status) {
+    case "Ready":
+      return "success";
+    case "Review":
+      return "warning";
+    case "Processing":
+      return "accent";
+  }
 }

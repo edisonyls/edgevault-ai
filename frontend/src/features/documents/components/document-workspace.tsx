@@ -2,6 +2,7 @@
 
 import type { ChangeEvent, FormEvent } from "react";
 import { useMemo, useState } from "react";
+import { Link, Surface } from "@heroui/react";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { WorkspaceHeader } from "@/components/layout/workspace-header";
 import { DocumentChat } from "@/features/chat/components/document-chat";
@@ -125,18 +126,22 @@ export function DocumentWorkspace() {
   }
 
   return (
-    <main
+    <Surface
+      render={(props) => <main {...props} />}
       id="main-content"
       className="min-h-screen bg-[#f7f8fb] text-slate-950"
     >
-      <a
+      <Link
         href="#documents"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-white focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-slate-950 focus:ring-2 focus:ring-indigo-600"
       >
         Skip to document list
-      </a>
+      </Link>
 
-      <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col lg:flex-row">
+      <Surface
+        variant="transparent"
+        className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col lg:flex-row"
+      >
         <AppSidebar
           documentCount={documents.length}
           readyCount={readyCount}
@@ -144,14 +149,21 @@ export function DocumentWorkspace() {
           onUpload={handleUpload}
         />
 
-        <section className="flex min-w-0 flex-1 flex-col">
+        <Surface
+          render={(props) => <section {...props} />}
+          variant="transparent"
+          className="flex min-w-0 flex-1 flex-col"
+        >
           <WorkspaceHeader
             documentCount={documents.length}
             readyCount={readyCount}
             reviewCount={reviewCount}
           />
 
-          <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <Surface
+            variant="transparent"
+            className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1fr)_420px]"
+          >
             <DocumentList
               documents={filteredDocuments}
               totalDocuments={documents.length}
@@ -174,9 +186,9 @@ export function DocumentWorkspace() {
               onInputChange={setChatInput}
               onSubmit={handleChatSubmit}
             />
-          </div>
-        </section>
-      </div>
-    </main>
+          </Surface>
+        </Surface>
+      </Surface>
+    </Surface>
   );
 }
