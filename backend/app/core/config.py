@@ -6,6 +6,8 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "development", "staging", "production"]
+DATABASE_POOL_MIN_SIZE = 1
+DATABASE_POOL_MAX_SIZE = 5
 
 
 class Settings(BaseSettings):
@@ -18,6 +20,9 @@ class Settings(BaseSettings):
     debug: bool = False
     api_prefix: str = "/api"
     allowed_origins: list[str] = ["http://localhost:3000"]
+    database_url: str
+    database_pool_min_size: int = DATABASE_POOL_MIN_SIZE
+    database_pool_max_size: int = DATABASE_POOL_MAX_SIZE
 
     model_config = SettingsConfigDict(
         env_file=find_dotenv(usecwd=True) or None,

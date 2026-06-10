@@ -1,8 +1,25 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.database import close_database_pool, create_database_pool
+
+# Gives the app one shared DB pool and guarantees it's cleaned up.
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings = get_settings()
+    app.state.database_pool = await create_database_pool(settings)
+
+    try:
+        yield
+    finally:
+        await close_database_pool(app.state.database_pool)
 
 
 def create_app() -> FastAPI:
@@ -12,6 +29,7 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         debug=settings.debug,
+        lifespan=lifespan,
     )
 
     app.add_middleware(
