@@ -24,15 +24,15 @@ type DocumentListProps = {
   totalDocuments: number;
   query: string;
   selectedType: "All" | DocumentType;
-  editingId: number | null;
+  editingId: string | null;
   draftName: string;
   onQueryChange: (value: string) => void;
   onSelectedTypeChange: (value: "All" | DocumentType) => void;
   onDraftNameChange: (value: string) => void;
   onStartRename: (document: VaultDocument) => void;
-  onSaveRename: (id: number) => void;
+  onSaveRename: (id: string) => void;
   onCancelRename: () => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: string) => void;
 };
 
 export function DocumentList({

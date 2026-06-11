@@ -3,7 +3,7 @@ export type DocumentStatus = "Ready" | "Review" | "Processing";
 export type DocumentType = "Bill" | "Receipt" | "Invoice" | "Statement";
 
 export type VaultDocument = {
-  id: number;
+  id: string;
   name: string;
   type: DocumentType;
   vendor: string;

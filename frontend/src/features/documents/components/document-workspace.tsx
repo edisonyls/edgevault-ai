@@ -7,27 +7,22 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { WorkspaceHeader } from "@/components/layout/workspace-header";
 import { DocumentChat } from "@/features/chat/components/document-chat";
 import { initialMessages } from "@/features/chat/data/mock-messages";
+import { uploadDocumentFile } from "../api/uploads";
 import { initialDocuments } from "../data/mock-documents";
-import {
-  formatFileSize,
-  inferDocumentType,
-  sumDetectedAmounts,
-} from "../lib/document-utils";
+import { mapUploadToDocument, sumDetectedAmounts } from "../lib/document-utils";
 import { DocumentList } from "./document-list";
-import type {
-  DocumentStatus,
-  DocumentType,
-  VaultDocument,
-} from "../types/document";
+import type { DocumentType, VaultDocument } from "../types/document";
 
 export function DocumentWorkspace() {
   const [documents, setDocuments] = useState(initialDocuments);
   const [query, setQuery] = useState("");
   const [selectedType, setSelectedType] = useState<"All" | DocumentType>("All");
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [messages, setMessages] = useState(initialMessages);
   const [chatInput, setChatInput] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const filteredDocuments = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -53,26 +48,41 @@ export function DocumentWorkspace() {
     (document) => document.status === "Review",
   ).length;
 
-  function handleUpload(event: ChangeEvent<HTMLInputElement>) {
+  async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
 
     if (files.length === 0) {
       return;
     }
 
-    const uploadedDocuments = files.map((file, index) => ({
-      id: Date.now() + index,
-      name: file.name,
-      type: inferDocumentType(file.name),
-      vendor: "New upload",
-      uploadedAt: "Just now",
-      size: formatFileSize(file.size),
-      amount: "Pending",
-      status: "Processing" as DocumentStatus,
-    }));
+    setIsUploading(true);
+    setUploadError(null);
 
-    setDocuments((current) => [...uploadedDocuments, ...current]);
-    event.target.value = "";
+    const results = await Promise.allSettled(files.map(uploadDocumentFile));
+    const uploadedDocuments: VaultDocument[] = [];
+    const failedFileNames: string[] = [];
+
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        uploadedDocuments.push(mapUploadToDocument(result.value));
+        return;
+      }
+
+      failedFileNames.push(files[index].name);
+    });
+
+    if (uploadedDocuments.length > 0) {
+      setDocuments((current) => [...uploadedDocuments, ...current]);
+    }
+
+    if (failedFileNames.length > 0) {
+      setUploadError(
+        `Could not upload ${failedFileNames.join(", ")}. Check the backend and try again.`,
+      );
+    }
+
+    setIsUploading(false);
   }
 
   function startRename(document: VaultDocument) {
@@ -80,7 +90,7 @@ export function DocumentWorkspace() {
     setDraftName(document.name);
   }
 
-  function saveRename(id: number) {
+  function saveRename(id: string) {
     const nextName = draftName.trim();
 
     if (!nextName) {
@@ -96,7 +106,7 @@ export function DocumentWorkspace() {
     setDraftName("");
   }
 
-  function deleteDocument(id: number) {
+  function deleteDocument(id: string) {
     setDocuments((current) => current.filter((document) => document.id !== id));
   }
 
@@ -147,6 +157,8 @@ export function DocumentWorkspace() {
           readyCount={readyCount}
           reviewCount={reviewCount}
           onUpload={handleUpload}
+          isUploading={isUploading}
+          uploadError={uploadError}
         />
 
         <Surface

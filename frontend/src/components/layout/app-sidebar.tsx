@@ -12,6 +12,8 @@ type AppSidebarProps = {
   readyCount: number;
   reviewCount: number;
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
+  isUploading: boolean;
+  uploadError: string | null;
 };
 
 export function AppSidebar({
@@ -19,6 +21,8 @@ export function AppSidebar({
   readyCount,
   reviewCount,
   onUpload,
+  isUploading,
+  uploadError,
 }: AppSidebarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,9 +57,10 @@ export function AppSidebar({
           variant="primary"
           className="min-h-11 gap-2 rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 lg:mt-8 lg:w-full"
           onPress={() => fileInputRef.current?.click()}
+          isDisabled={isUploading}
         >
           <IconUpload className="size-4" />
-          Upload
+          {isUploading ? "Uploading" : "Upload"}
         </Button>
         <input
           ref={fileInputRef}
@@ -64,7 +69,16 @@ export function AppSidebar({
           multiple
           accept=".pdf,.png,.jpg,.jpeg,.csv,.doc,.docx"
           onChange={onUpload}
+          disabled={isUploading}
         />
+        {uploadError && (
+          <Typography.Paragraph
+            role="alert"
+            className="mt-3 max-w-full text-sm text-rose-700 lg:text-xs"
+          >
+            {uploadError}
+          </Typography.Paragraph>
+        )}
       </Surface>
 
       <nav className="mt-5 hidden space-y-1 lg:block" aria-label="Workspace">

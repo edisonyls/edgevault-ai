@@ -2,7 +2,7 @@ import type { VaultDocument } from "../types/document";
 
 export const initialDocuments: VaultDocument[] = [
   {
-    id: 1,
+    id: "sample-1",
     name: "Electricity bill - May 2026.pdf",
     type: "Bill",
     vendor: "United Energy",
@@ -12,7 +12,7 @@ export const initialDocuments: VaultDocument[] = [
     status: "Ready",
   },
   {
-    id: 2,
+    id: "sample-2",
     name: "Office supplies receipt.pdf",
     type: "Receipt",
     vendor: "Officeworks",
@@ -22,7 +22,7 @@ export const initialDocuments: VaultDocument[] = [
     status: "Review",
   },
   {
-    id: 3,
+    id: "sample-3",
     name: "Internet invoice - June.pdf",
     type: "Invoice",
     vendor: "Aussie Broadband",
@@ -32,7 +32,7 @@ export const initialDocuments: VaultDocument[] = [
     status: "Ready",
   },
   {
-    id: 4,
+    id: "sample-4",
     name: "Business account statement.csv",
     type: "Statement",
     vendor: "Bank export",
