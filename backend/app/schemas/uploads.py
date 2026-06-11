@@ -7,6 +7,7 @@ from pydantic import BaseModel
 class UploadMetadataResponse(BaseModel):
     id: UUID
     original_filename: str
+    display_filename: str
     stored_filename: str
     file_path: str | None
     mime_type: str
