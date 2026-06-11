@@ -1,0 +1,161 @@
+import { useCallback, useEffect, useState } from "react";
+import {
+  deleteUploadMetadata,
+  listUploadMetadata,
+  updateUploadMetadata,
+  uploadDocumentFile,
+} from "../api/uploads";
+import { mapUploadToDocument } from "../lib/document-utils";
+import type { VaultDocument } from "../types/document";
+
+type UseDocuments = {
+  documents: VaultDocument[];
+  isLoading: boolean;
+  error: string | null;
+  isUploading: boolean;
+  uploadError: string | null;
+  pendingId: string | null;
+  clearError: () => void;
+  uploadFiles: (files: File[]) => Promise<void>;
+  renameDocument: (id: string, name: string) => Promise<boolean>;
+  deleteDocument: (id: string) => Promise<boolean>;
+};
+
+/**
+ * Owns the document collection and every async operation against the uploads
+ * API (load, upload, rename, delete) so view components stay presentational.
+ */
+export function useDocuments(): UseDocuments {
+  const [documents, setDocuments] = useState<VaultDocument[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadDocuments() {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const uploads = await listUploadMetadata({ signal: controller.signal });
+        setDocuments(uploads.map(mapUploadToDocument));
+      } catch (caught) {
+        if (caught instanceof DOMException && caught.name === "AbortError") {
+          return;
+        }
+
+        setError(getErrorMessage(caught, "Could not load uploads."));
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadDocuments();
+
+    return () => controller.abort();
+  }, []);
+
+  const clearError = useCallback(() => setError(null), []);
+
+  const uploadFiles = useCallback(async (files: File[]) => {
+    if (files.length === 0) {
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+    setError(null);
+
+    const results = await Promise.allSettled(files.map(uploadDocumentFile));
+    const uploaded: VaultDocument[] = [];
+    const failedNames: string[] = [];
+
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        uploaded.push(mapUploadToDocument(result.value));
+        return;
+      }
+
+      failedNames.push(files[index].name);
+    });
+
+    if (uploaded.length > 0) {
+      setDocuments((current) => [...uploaded, ...current]);
+    }
+
+    if (failedNames.length > 0) {
+      setUploadError(
+        `Could not upload ${failedNames.join(", ")}. Check the backend and try again.`,
+      );
+    }
+
+    setIsUploading(false);
+  }, []);
+
+  const renameDocument = useCallback(async (id: string, name: string) => {
+    setPendingId(id);
+    setError(null);
+
+    try {
+      const updated = await updateUploadMetadata(id, {
+        display_filename: name,
+      });
+      setDocuments((current) =>
+        current.map((document) =>
+          document.id === id ? mapUploadToDocument(updated) : document,
+        ),
+      );
+      return true;
+    } catch (caught) {
+      setError(getErrorMessage(caught, "Could not rename document."));
+      return false;
+    } finally {
+      setPendingId(null);
+    }
+  }, []);
+
+  const deleteDocument = useCallback(async (id: string) => {
+    setPendingId(id);
+    setError(null);
+
+    try {
+      await deleteUploadMetadata(id);
+      setDocuments((current) =>
+        current.filter((document) => document.id !== id),
+      );
+      return true;
+    } catch (caught) {
+      setError(getErrorMessage(caught, "Could not delete document."));
+      return false;
+    } finally {
+      setPendingId(null);
+    }
+  }, []);
+
+  return {
+    documents,
+    isLoading,
+    error,
+    isUploading,
+    uploadError,
+    pendingId,
+    clearError,
+    uploadFiles,
+    renameDocument,
+    deleteDocument,
+  };
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return fallback;
+}

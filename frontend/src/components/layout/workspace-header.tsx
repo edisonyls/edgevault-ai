@@ -27,13 +27,13 @@ export function WorkspaceHeader({
           </Typography.Paragraph>
           <Typography.Heading
             level={1}
-            className="mt-2 text-3xl font-semibold tracking-normal text-slate-950 sm:text-4xl"
+            className="mt-2 text-3xl font-semibold tracking-tight text-slate-950"
           >
-            Review uploaded documents and ask questions about them.
+            Your documents
           </Typography.Heading>
-          <Typography.Paragraph className="mt-3 text-base leading-7 text-slate-600">
-            Manage file names, remove duplicates, and keep finance documents
-            ready for AI-assisted lookup.
+          <Typography.Paragraph className="mt-2 text-base leading-7 text-slate-600">
+            Review uploaded files, tidy up names and duplicates, and ask
+            questions about them with AI-assisted lookup.
           </Typography.Paragraph>
         </Surface>
 

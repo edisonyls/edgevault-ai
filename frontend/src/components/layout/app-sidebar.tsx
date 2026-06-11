@@ -1,7 +1,5 @@
 "use client";
 
-import type { ChangeEvent } from "react";
-import { useRef } from "react";
 import { Button, Link, Separator, Surface, Typography } from "@heroui/react";
 import { workspaceNavigation } from "@/config/navigation";
 import { IconSpark, IconUpload } from "@/components/icons";
@@ -11,7 +9,7 @@ type AppSidebarProps = {
   documentCount: number;
   readyCount: number;
   reviewCount: number;
-  onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
+  onPickFiles: () => void;
   isUploading: boolean;
   uploadError: string | null;
 };
@@ -20,12 +18,10 @@ export function AppSidebar({
   documentCount,
   readyCount,
   reviewCount,
-  onUpload,
+  onPickFiles,
   isUploading,
   uploadError,
 }: AppSidebarProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   return (
     <Surface
       render={(props) => <aside {...props} />}
@@ -56,21 +52,12 @@ export function AppSidebar({
           type="button"
           variant="primary"
           className="min-h-11 gap-2 rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 lg:mt-8 lg:w-full"
-          onPress={() => fileInputRef.current?.click()}
+          onPress={onPickFiles}
           isDisabled={isUploading}
         >
           <IconUpload className="size-4" />
-          {isUploading ? "Uploading" : "Upload"}
+          {isUploading ? "Uploading…" : "Upload"}
         </Button>
-        <input
-          ref={fileInputRef}
-          className="sr-only"
-          type="file"
-          multiple
-          accept=".pdf,.png,.jpg,.jpeg,.csv,.doc,.docx"
-          onChange={onUpload}
-          disabled={isUploading}
-        />
         {uploadError && (
           <Typography.Paragraph
             role="alert"

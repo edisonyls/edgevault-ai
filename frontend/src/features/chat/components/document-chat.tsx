@@ -39,8 +39,8 @@ export function DocumentChat({
             Document chat
           </Typography.Heading>
           <Typography.Paragraph className="mt-1 text-sm leading-6 text-slate-500">
-            Ask questions about uploaded files. Backend wiring can connect here
-            later.
+            Ask questions about your uploaded files — totals, vendors, due
+            dates, and more.
           </Typography.Paragraph>
         </Surface>
         <Surface

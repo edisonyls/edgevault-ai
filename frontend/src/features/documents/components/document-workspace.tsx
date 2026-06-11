@@ -1,28 +1,41 @@
 "use client";
 
-import type { ChangeEvent, FormEvent } from "react";
-import { useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, Surface } from "@heroui/react";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { WorkspaceHeader } from "@/components/layout/workspace-header";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DocumentChat } from "@/features/chat/components/document-chat";
-import { initialMessages } from "@/features/chat/data/mock-messages";
-import { uploadDocumentFile } from "../api/uploads";
-import { initialDocuments } from "../data/mock-documents";
-import { mapUploadToDocument, sumDetectedAmounts } from "../lib/document-utils";
+import { useDocumentChat } from "@/features/chat/hooks/use-document-chat";
+import { useDocuments } from "../hooks/use-documents";
+import type { DocumentTypeFilter, VaultDocument } from "../types/document";
 import { DocumentList } from "./document-list";
-import type { DocumentType, VaultDocument } from "../types/document";
 
 export function DocumentWorkspace() {
-  const [documents, setDocuments] = useState(initialDocuments);
+  const {
+    documents,
+    isLoading,
+    error,
+    isUploading,
+    uploadError,
+    pendingId,
+    clearError,
+    uploadFiles,
+    renameDocument,
+    deleteDocument,
+  } = useDocuments();
+
   const [query, setQuery] = useState("");
-  const [selectedType, setSelectedType] = useState<"All" | DocumentType>("All");
+  const [selectedType, setSelectedType] = useState<DocumentTypeFilter>("All");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
-  const [messages, setMessages] = useState(initialMessages);
-  const [chatInput, setChatInput] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<VaultDocument | null>(
+    null,
+  );
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const chat = useDocumentChat(documents);
 
   const filteredDocuments = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -48,91 +61,75 @@ export function DocumentWorkspace() {
     (document) => document.status === "Review",
   ).length;
 
+  function openFilePicker() {
+    fileInputRef.current?.click();
+  }
+
+  function clearFilters() {
+    setQuery("");
+    setSelectedType("All");
+  }
+
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
 
-    if (files.length === 0) {
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadError(null);
-
-    const results = await Promise.allSettled(files.map(uploadDocumentFile));
-    const uploadedDocuments: VaultDocument[] = [];
-    const failedFileNames: string[] = [];
-
-    results.forEach((result, index) => {
-      if (result.status === "fulfilled") {
-        uploadedDocuments.push(mapUploadToDocument(result.value));
-        return;
-      }
-
-      failedFileNames.push(files[index].name);
-    });
-
-    if (uploadedDocuments.length > 0) {
-      setDocuments((current) => [...uploadedDocuments, ...current]);
-    }
-
-    if (failedFileNames.length > 0) {
-      setUploadError(
-        `Could not upload ${failedFileNames.join(", ")}. Check the backend and try again.`,
-      );
-    }
-
-    setIsUploading(false);
+    await uploadFiles(files);
   }
 
   function startRename(document: VaultDocument) {
+    clearError();
     setEditingId(document.id);
     setDraftName(document.name);
   }
 
-  function saveRename(id: string) {
+  function cancelRename() {
+    setEditingId(null);
+    setDraftName("");
+  }
+
+  async function saveRename(id: string) {
     const nextName = draftName.trim();
 
     if (!nextName) {
       return;
     }
 
-    setDocuments((current) =>
-      current.map((document) =>
-        document.id === id ? { ...document, name: nextName } : document,
-      ),
-    );
-    setEditingId(null);
-    setDraftName("");
-  }
+    const current = documents.find((document) => document.id === id);
 
-  function deleteDocument(id: string) {
-    setDocuments((current) => current.filter((document) => document.id !== id));
-  }
-
-  function handleChatSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const question = chatInput.trim();
-
-    if (!question) {
+    if (current?.name === nextName) {
+      cancelRename();
       return;
     }
 
-    const totalAmount = sumDetectedAmounts(documents);
+    if (await renameDocument(id, nextName)) {
+      cancelRename();
+    }
+  }
 
-    setMessages((current) => [
-      ...current,
-      { id: Date.now(), role: "user", text: question },
-      {
-        id: Date.now() + 1,
-        role: "assistant",
-        text: `Preview answer: I found ${documents.length} uploaded documents, ${reviewCount} marked for review, and about $${totalAmount.toFixed(
-          2,
-        )} across documents with detected totals.`,
-      },
-    ]);
-    setChatInput("");
+  function requestDelete(id: string) {
+    const candidate = documents.find((document) => document.id === id);
+
+    if (candidate) {
+      clearError();
+      setDeleteCandidate(candidate);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteCandidate) {
+      return;
+    }
+
+    const id = deleteCandidate.id;
+
+    if (await deleteDocument(id)) {
+      if (editingId === id) {
+        cancelRename();
+      }
+    }
+
+    setDeleteCandidate(null);
   }
 
   return (
@@ -156,9 +153,19 @@ export function DocumentWorkspace() {
           documentCount={documents.length}
           readyCount={readyCount}
           reviewCount={reviewCount}
-          onUpload={handleUpload}
+          onPickFiles={openFilePicker}
           isUploading={isUploading}
           uploadError={uploadError}
+        />
+
+        <input
+          ref={fileInputRef}
+          className="sr-only"
+          type="file"
+          multiple
+          accept=".pdf,.png,.jpg,.jpeg,.csv,.doc,.docx"
+          onChange={handleUpload}
+          disabled={isUploading}
         />
 
         <Surface
@@ -183,24 +190,46 @@ export function DocumentWorkspace() {
               selectedType={selectedType}
               editingId={editingId}
               draftName={draftName}
+              isLoading={isLoading}
+              error={error}
+              pendingDocumentId={pendingId}
               onQueryChange={setQuery}
               onSelectedTypeChange={setSelectedType}
               onDraftNameChange={setDraftName}
               onStartRename={startRename}
               onSaveRename={saveRename}
-              onCancelRename={() => setEditingId(null)}
-              onDelete={deleteDocument}
+              onCancelRename={cancelRename}
+              onDelete={requestDelete}
+              onClearFilters={clearFilters}
+              onPickFiles={openFilePicker}
+              isUploading={isUploading}
             />
 
             <DocumentChat
-              messages={messages}
-              input={chatInput}
-              onInputChange={setChatInput}
-              onSubmit={handleChatSubmit}
+              messages={chat.messages}
+              input={chat.input}
+              onInputChange={chat.setInput}
+              onSubmit={chat.submit}
             />
           </Surface>
         </Surface>
       </Surface>
+
+      <ConfirmDialog
+        isOpen={deleteCandidate !== null}
+        title="Delete this document?"
+        description={
+          deleteCandidate
+            ? `“${deleteCandidate.name}” will be permanently removed. This can't be undone.`
+            : ""
+        }
+        confirmLabel="Delete document"
+        isConfirming={
+          deleteCandidate !== null && pendingId === deleteCandidate.id
+        }
+        onConfirm={() => void confirmDelete()}
+        onCancel={() => setDeleteCandidate(null)}
+      />
     </Surface>
   );
 }

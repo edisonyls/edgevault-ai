@@ -2,6 +2,16 @@ export type DocumentStatus = "Ready" | "Review" | "Processing";
 
 export type DocumentType = "Bill" | "Receipt" | "Invoice" | "Statement";
 
+export const DOCUMENT_TYPE_FILTERS = [
+  "All",
+  "Bill",
+  "Receipt",
+  "Invoice",
+  "Statement",
+] as const;
+
+export type DocumentTypeFilter = (typeof DOCUMENT_TYPE_FILTERS)[number];
+
 export type VaultDocument = {
   id: string;
   name: string;

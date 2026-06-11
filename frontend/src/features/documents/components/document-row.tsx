@@ -1,22 +1,26 @@
 import { Button, Chip, Input, Surface, Table, Typography } from "@heroui/react";
-import { IconEdit, IconFile, IconTrash } from "@/components/icons";
+import { IconFile } from "@/components/icons";
+import { statusColor, typeColor } from "../lib/document-display";
 import type { VaultDocument } from "../types/document";
+import { DocumentActions } from "./document-actions";
 
 type DocumentRowProps = {
   document: VaultDocument;
   isEditing: boolean;
   draftName: string;
+  isPending: boolean;
   onDraftNameChange: (value: string) => void;
   onStartRename: (document: VaultDocument) => void;
-  onSaveRename: (id: string) => void;
+  onSaveRename: (id: string) => void | Promise<void>;
   onCancelRename: () => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => void | Promise<void>;
 };
 
 export function DocumentRow({
   document,
   isEditing,
   draftName,
+  isPending,
   onDraftNameChange,
   onStartRename,
   onSaveRename,
@@ -50,22 +54,24 @@ export function DocumentRow({
                   onChange={(event) => onDraftNameChange(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
-                      onSaveRename(document.id);
+                      void onSaveRename(document.id);
                     }
                     if (event.key === "Escape") {
                       onCancelRename();
                     }
                   }}
                   className="min-h-10 min-w-0 flex-1 rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600"
+                  disabled={isPending}
                   autoFocus
                 />
                 <Button
                   type="button"
                   variant="primary"
-                  onPress={() => onSaveRename(document.id)}
+                  onPress={() => void onSaveRename(document.id)}
+                  isDisabled={isPending}
                   className="min-h-10 rounded-md bg-slate-950 px-3 text-sm font-semibold text-white transition hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-600"
                 >
-                  Save
+                  {isPending ? "Saving" : "Save"}
                 </Button>
               </Surface>
             ) : (
@@ -112,53 +118,15 @@ export function DocumentRow({
         </Chip>
       </Table.Cell>
       <Table.Cell className="px-4 py-4">
-        <Surface variant="transparent" className="flex justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            isIconOnly
-            onPress={() => onStartRename(document)}
-            aria-label={`Rename ${document.name}`}
-            className="grid min-h-11 min-w-11 place-items-center rounded-md border border-slate-200 text-slate-600 transition hover:border-indigo-300 hover:text-indigo-700 focus:ring-2 focus:ring-indigo-600"
-          >
-            <IconEdit className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            isIconOnly
-            onPress={() => onDelete(document.id)}
-            aria-label={`Delete ${document.name}`}
-            className="grid min-h-11 min-w-11 place-items-center rounded-md border border-slate-200 text-slate-600 transition hover:border-rose-300 hover:text-rose-700 focus:ring-2 focus:ring-rose-500"
-          >
-            <IconTrash className="size-4" />
-          </Button>
+        <Surface variant="transparent" className="flex justify-end">
+          <DocumentActions
+            document={document}
+            isPending={isPending}
+            onStartRename={onStartRename}
+            onDelete={onDelete}
+          />
         </Surface>
       </Table.Cell>
     </Table.Row>
   );
-}
-
-function typeColor(type: VaultDocument["type"]) {
-  switch (type) {
-    case "Bill":
-      return "accent";
-    case "Invoice":
-      return "success";
-    case "Receipt":
-      return "default";
-    case "Statement":
-      return "warning";
-  }
-}
-
-function statusColor(status: VaultDocument["status"]) {
-  switch (status) {
-    case "Ready":
-      return "success";
-    case "Review":
-      return "warning";
-    case "Processing":
-      return "accent";
-  }
 }
