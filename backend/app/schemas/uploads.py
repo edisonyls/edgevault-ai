@@ -1,17 +1,32 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+UploadStatus = Literal["uploaded", "processing", "processed", "failed"]
 
 
 class UploadMetadataResponse(BaseModel):
     id: UUID
+    text: str | None
     original_filename: str
     display_filename: str
     stored_filename: str
     file_path: str | None
     mime_type: str
     file_size: int
-    status: str
+    status: UploadStatus
     created_at: datetime
     updated_at: datetime
+
+
+class UploadMetadataUpdate(BaseModel):
+    display_filename: str | None = Field(default=None, max_length=255)
+    file_path: str | None = None
+    status: UploadStatus | None = None
+    text: str | None = None
+
+
+class UploadDeleteResponse(BaseModel):
+    message: str
