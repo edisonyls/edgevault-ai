@@ -23,7 +23,6 @@ class UploadMetadataResponse(BaseModel):
 
 class UploadMetadataUpdate(BaseModel):
     display_filename: str | None = Field(default=None, max_length=255)
-    file_path: str | None = None
     status: UploadStatus | None = None
     text: str | None = None
 

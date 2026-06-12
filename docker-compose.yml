@@ -23,6 +23,10 @@ services:
         required: false
     ports:
       - "8000:8000"
+    environment:
+      UPLOAD_STORAGE_DIR: /data/uploads
+    volumes:
+      - ${UPLOAD_STORAGE_HOST_DIR:-./var/uploads}:/data/uploads
     depends_on:
       database:
         condition: service_healthy

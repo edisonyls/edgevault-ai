@@ -23,7 +23,6 @@ export type UploadMetadataResponse = {
 
 export type UploadMetadataUpdate = {
   display_filename?: string;
-  file_path?: string | null;
   status?: UploadStatus;
   text?: string | null;
 };

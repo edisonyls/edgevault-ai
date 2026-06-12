@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from dotenv import find_dotenv
@@ -23,6 +24,7 @@ class Settings(BaseSettings):
     database_url: str
     database_pool_min_size: int = DATABASE_POOL_MIN_SIZE
     database_pool_max_size: int = DATABASE_POOL_MAX_SIZE
+    upload_storage_dir: Path = Path("var/uploads")
 
     model_config = SettingsConfigDict(
         env_file=find_dotenv(usecwd=True) or None,

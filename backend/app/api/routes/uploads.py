@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
+from app.core.config import Settings, get_settings
 from app.core.database import DatabasePoolDep
 from app.repositories.uploads import UploadRepository
 from app.schemas.uploads import (
@@ -16,29 +17,23 @@ from app.services.uploads import (
     UploadNotFoundError,
     UploadService,
     UploadServiceError,
+    UploadStorageError,
     UploadValidationError,
 )
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
-UPLOAD_READ_CHUNK_SIZE = 1024 * 1024
 MAX_UPLOAD_LIST_LIMIT = 500
 
 
-def get_upload_service(database_pool: DatabasePoolDep) -> UploadService:
-    return UploadService(UploadRepository(database_pool))
+type SettingsDep = Annotated[Settings, Depends(get_settings)]
+
+
+def get_upload_service(database_pool: DatabasePoolDep, settings: SettingsDep) -> UploadService:
+    return UploadService(UploadRepository(database_pool), settings.upload_storage_dir)
 
 
 type UploadServiceDep = Annotated[UploadService, Depends(get_upload_service)]
-
-
-async def calculate_file_size(file: UploadFile) -> int:
-    size = 0
-
-    while chunk := await file.read(UPLOAD_READ_CHUNK_SIZE):
-        size += len(chunk)
-
-    return size
 
 
 def raise_upload_http_exception(exc: UploadServiceError) -> NoReturn:
@@ -60,6 +55,12 @@ def raise_upload_http_exception(exc: UploadServiceError) -> NoReturn:
             detail=str(exc),
         ) from exc
 
+    if isinstance(exc, UploadStorageError):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Unexpected upload service error.",
@@ -75,14 +76,8 @@ async def create_upload_metadata(
     upload_service: UploadServiceDep,
     file: Annotated[UploadFile, File()],
 ) -> UploadMetadataResponse:
-    file_size = await calculate_file_size(file)
-
     try:
-        return await upload_service.create_upload_metadata(
-            filename=file.filename,
-            content_type=file.content_type,
-            file_size=file_size,
-        )
+        return await upload_service.create_upload(file=file)
     except UploadServiceError as exc:
         raise_upload_http_exception(exc)
 
@@ -90,7 +85,8 @@ async def create_upload_metadata(
 @router.get("", response_model=list[UploadMetadataResponse])
 async def list_upload_metadata(
     upload_service: UploadServiceDep,
-    status_filter: Annotated[UploadStatus | None, Query(alias="status")] = None,
+    status_filter: Annotated[UploadStatus |
+                             None, Query(alias="status")] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_UPLOAD_LIST_LIMIT)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[UploadMetadataResponse]:

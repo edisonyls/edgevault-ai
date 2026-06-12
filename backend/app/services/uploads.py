@@ -1,7 +1,11 @@
-from pathlib import PurePath
+import asyncio
+from contextlib import suppress
+from datetime import UTC, datetime
+from pathlib import Path, PurePath, PurePosixPath
 from uuid import UUID, uuid4
 
 from asyncpg import Record
+from fastapi import UploadFile
 
 from app.repositories.uploads import UniqueDisplayFilenameError, UploadRepository
 from app.schemas.uploads import UploadMetadataResponse, UploadMetadataUpdate, UploadStatus
@@ -9,6 +13,7 @@ from app.schemas.uploads import UploadMetadataResponse, UploadMetadataUpdate, Up
 MAX_FILENAME_LENGTH = 255
 DEFAULT_MIME_TYPE = "application/octet-stream"
 MAX_DISPLAY_FILENAME_ATTEMPTS = 10_000
+UPLOAD_READ_CHUNK_SIZE = 1024 * 1024
 
 
 class UploadServiceError(Exception):
@@ -27,6 +32,10 @@ class UploadConflictError(UploadServiceError):
     pass
 
 
+class UploadStorageError(UploadServiceError):
+    pass
+
+
 def clean_original_filename(filename: str | None) -> str:
     if filename is None:
         raise UploadValidationError("Uploaded file must include a filename.")
@@ -36,7 +45,8 @@ def clean_original_filename(filename: str | None) -> str:
         raise UploadValidationError("Uploaded file must include a filename.")
 
     if len(clean_filename) > MAX_FILENAME_LENGTH:
-        raise UploadValidationError(f"Filename must be {MAX_FILENAME_LENGTH} characters or fewer.")
+        raise UploadValidationError(
+            f"Filename must be {MAX_FILENAME_LENGTH} characters or fewer.")
 
     return clean_filename
 
@@ -62,6 +72,16 @@ def build_stored_filename(original_filename: str) -> str:
     return f"{uuid4()}{suffix}"
 
 
+def build_file_path(stored_filename: str) -> str:
+    now = datetime.now(UTC)
+    return PurePosixPath(
+        str(now.year),
+        f"{now.month:02}",
+        f"{now.day:02}",
+        stored_filename,
+    ).as_posix()
+
+
 def build_display_filename(original_filename: str, duplicate_index: int) -> str:
     if duplicate_index == 0:
         return original_filename
@@ -72,9 +92,10 @@ def build_display_filename(original_filename: str, duplicate_index: int) -> str:
     stem = path.stem if extension else original_filename
 
     if len(extension) + len(suffix) >= MAX_FILENAME_LENGTH:
-        extension = extension[-(MAX_FILENAME_LENGTH - len(suffix) - 1) :]
+        extension = extension[-(MAX_FILENAME_LENGTH - len(suffix) - 1):]
 
-    max_stem_length = max(1, MAX_FILENAME_LENGTH - len(extension) - len(suffix))
+    max_stem_length = max(1, MAX_FILENAME_LENGTH -
+                          len(extension) - len(suffix))
     return f"{stem[:max_stem_length]}{suffix}{extension}"
 
 
@@ -95,37 +116,103 @@ def row_to_upload_metadata(row: Record) -> UploadMetadataResponse:
 
 
 class UploadService:
-    def __init__(self, upload_repository: UploadRepository) -> None:
+    def __init__(self, upload_repository: UploadRepository, upload_storage_dir: Path) -> None:
         self.upload_repository = upload_repository
+        self.upload_storage_dir = upload_storage_dir
 
-    async def create_upload_metadata(
+    def resolve_storage_path(self, file_path: str) -> Path:
+        relative_path = PurePosixPath(file_path)
+
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            raise UploadStorageError("Stored file path is invalid.")
+
+        return self.upload_storage_dir.joinpath(*relative_path.parts)
+
+    async def save_uploaded_file(self, file: UploadFile, file_path: str) -> int:
+        storage_path = self.resolve_storage_path(file_path)
+        temp_path = storage_path.with_name(
+            f".{storage_path.name}.{uuid4()}.tmp")
+        file_size = 0
+        handle = None
+
+        try:
+            await asyncio.to_thread(storage_path.parent.mkdir, parents=True, exist_ok=True)
+            handle = await asyncio.to_thread(temp_path.open, "xb")
+
+            while chunk := await file.read(UPLOAD_READ_CHUNK_SIZE):
+                file_size += len(chunk)
+                await asyncio.to_thread(handle.write, chunk)
+
+            await asyncio.to_thread(handle.close)
+            handle = None
+            await asyncio.to_thread(temp_path.replace, storage_path)
+        except OSError as exc:
+            raise UploadStorageError("Unable to store uploaded file.") from exc
+        finally:
+            if handle is not None:
+                await asyncio.to_thread(handle.close)
+            with suppress(OSError):
+                await asyncio.to_thread(temp_path.unlink)
+
+        return file_size
+
+    async def delete_stored_file(self, file_path: str | None) -> None:
+        if file_path is None:
+            return
+
+        storage_path = self.resolve_storage_path(file_path)
+
+        try:
+            await asyncio.to_thread(storage_path.unlink)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            raise UploadStorageError("Unable to delete stored file.") from exc
+
+    async def create_upload(
         self,
         *,
-        filename: str | None,
-        content_type: str | None,
-        file_size: int,
+        file: UploadFile,
     ) -> UploadMetadataResponse:
-        original_filename = clean_original_filename(filename)
+        original_filename = clean_original_filename(file.filename)
         stored_filename = build_stored_filename(original_filename)
-        mime_type = content_type or DEFAULT_MIME_TYPE
+        file_path = build_file_path(stored_filename)
+        mime_type = file.content_type or DEFAULT_MIME_TYPE
+        file_saved = False
+        created_row: Record | None = None
 
-        for duplicate_index in range(MAX_DISPLAY_FILENAME_ATTEMPTS):
-            display_filename = build_display_filename(original_filename, duplicate_index)
+        try:
+            file_size = await self.save_uploaded_file(file, file_path)
+            file_saved = True
 
-            try:
-                row = await self.upload_repository.create(
-                    original_filename=original_filename,
-                    display_filename=display_filename,
-                    stored_filename=stored_filename,
-                    file_path=None,
-                    mime_type=mime_type,
-                    file_size=file_size,
-                )
-                return row_to_upload_metadata(row)
-            except UniqueDisplayFilenameError:
-                continue
+            for duplicate_index in range(MAX_DISPLAY_FILENAME_ATTEMPTS):
+                display_filename = build_display_filename(
+                    original_filename, duplicate_index)
 
-        raise UploadConflictError("Unable to generate a unique display filename.")
+                try:
+                    row = await self.upload_repository.create(
+                        original_filename=original_filename,
+                        display_filename=display_filename,
+                        stored_filename=stored_filename,
+                        file_path=file_path,
+                        mime_type=mime_type,
+                        file_size=file_size,
+                    )
+                    created_row = row
+                    break
+                except UniqueDisplayFilenameError:
+                    continue
+
+            if created_row is None:
+                raise UploadConflictError(
+                    "Unable to generate a unique display filename.")
+        except Exception:
+            if file_saved:
+                with suppress(UploadStorageError):
+                    await self.delete_stored_file(file_path)
+            raise
+
+        return row_to_upload_metadata(created_row)
 
     async def list_upload_metadata(
         self,
@@ -160,7 +247,8 @@ class UploadService:
             raise UploadValidationError("At least one field must be provided.")
 
         if "display_filename" in update_data:
-            update_data["display_filename"] = clean_display_filename(update.display_filename)
+            update_data["display_filename"] = clean_display_filename(
+                update.display_filename)
 
         if "status" in update_data and update.status is None:
             raise UploadValidationError("Status cannot be null.")
@@ -168,7 +256,8 @@ class UploadService:
         try:
             row = await self.upload_repository.update(upload_id, update_data)
         except UniqueDisplayFilenameError as exc:
-            raise UploadConflictError("Display filename already exists.") from exc
+            raise UploadConflictError(
+                "Display filename already exists.") from exc
 
         if row is None:
             raise UploadNotFoundError("Upload not found.")
@@ -176,7 +265,14 @@ class UploadService:
         return row_to_upload_metadata(row)
 
     async def delete_upload_metadata(self, upload_id: UUID) -> None:
+        existing = await self.upload_repository.get(upload_id)
+
+        if existing is None:
+            raise UploadNotFoundError("Upload not found.")
+
         deleted = await self.upload_repository.delete(upload_id)
 
         if not deleted:
             raise UploadNotFoundError("Upload not found.")
+
+        await self.delete_stored_file(existing["file_path"])
