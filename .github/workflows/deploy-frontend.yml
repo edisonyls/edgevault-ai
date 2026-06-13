@@ -1,0 +1,46 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-frontend-production
+  cancel-in-progress: true
+
+env:
+  FRONTEND_DEPLOY_PATH: ${{ secrets.FRONTEND_DEPLOY_PATH }}
+  NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+
+jobs:
+  deploy:
+    name: Deploy frontend VM
+    runs-on: [self-hosted, frontend]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          test -n "$FRONTEND_DEPLOY_PATH"
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Deploy frontend build
+        working-directory: frontend
+        run: |
+          mkdir -p "$FRONTEND_DEPLOY_PATH"
+          rsync -az --delete \
+            --exclude ".env*" \
+            --exclude "node_modules" \
+            ./ "$FRONTEND_DEPLOY_PATH/"
+          cd "$FRONTEND_DEPLOY_PATH"
+          npm ci --omit=dev

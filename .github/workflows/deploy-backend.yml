@@ -1,0 +1,86 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend-production
+  cancel-in-progress: true
+
+env:
+  BACKEND_DEPLOY_PATH: ${{ secrets.BACKEND_DEPLOY_PATH }}
+  BACKEND_SERVICE: ${{ secrets.BACKEND_SERVICE }}
+  BACKEND_RUN_MIGRATIONS: ${{ secrets.BACKEND_RUN_MIGRATIONS }}
+  BACKEND_NODE_ENV: ${{ secrets.BACKEND_NODE_ENV }}
+  BACKEND_DATABASE_URL: ${{ secrets.BACKEND_DATABASE_URL }}
+
+jobs:
+  deploy:
+    name: Deploy backend VM
+    runs-on: [self-hosted, backend]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to server
+        working-directory: backend
+        run: |
+          test -n "$BACKEND_DEPLOY_PATH"
+          test -n "$BACKEND_DATABASE_URL"
+
+          # Create new deployment directory
+          mkdir -p "$BACKEND_DEPLOY_PATH"
+
+          # Copy built application to deployment directory
+          echo "Copying application files..."
+          rsync -av --delete \
+            --exclude='.env*' \
+            --exclude='.venv' \
+            --exclude='__pycache__' \
+            --exclude='.ruff_cache' \
+            ./ "$BACKEND_DEPLOY_PATH/"
+
+          # Create .env file in deployment directory
+          echo "Creating .env file in deployment directory..."
+          printf 'NODE_ENV=%s\nDATABASE_URL=%s\n' \
+            "$BACKEND_NODE_ENV" \
+            "$BACKEND_DATABASE_URL" \
+            > "$BACKEND_DEPLOY_PATH/.env"
+
+          # Create virtual environment and install dependencies
+          echo "Installing dependencies..."
+          cd "$BACKEND_DEPLOY_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          uv sync --frozen
+
+          if [ "$BACKEND_RUN_MIGRATIONS" = "true" ]; then
+            uv run python scripts/migrate.py
+          fi
+
+          echo "Deployment completed successfully"
+
+      - name: Restart service
+        run: |
+          sudo systemctl restart "$BACKEND_SERVICE"
+
+      - name: Verify deployment
+        run: |
+          sleep 10
+          sudo systemctl status "$BACKEND_SERVICE" --no-pager
+
+      - name: Health check
+        env:
+          HEALTH_CHECK_URL: ${{ secrets.BACKEND_HEALTH_CHECK_URL }}
+        run: |
+          if [ -z "$HEALTH_CHECK_URL" ]; then
+            exit 0
+          fi
+          sleep 5
+          curl --fail --show-error --silent --location "$HEALTH_CHECK_URL" > /dev/null
