@@ -30,7 +30,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy to server
-        working-directory: backend
         run: |
           test -n "$BACKEND_DEPLOY_PATH"
           test -n "$BACKEND_DATABASE_URL"
@@ -41,8 +40,11 @@ jobs:
           # Copy built application to deployment directory
           echo "Copying application files..."
           rsync -av --delete \
+            --exclude='.git' \
+            --exclude='.github' \
             --exclude='.env*' \
             --exclude='.venv' \
+            --exclude='node_modules' \
             --exclude='__pycache__' \
             --exclude='.ruff_cache' \
             ./ "$BACKEND_DEPLOY_PATH/"
@@ -52,11 +54,11 @@ jobs:
           printf 'NODE_ENV=%s\nDATABASE_URL=%s\n' \
             "$BACKEND_NODE_ENV" \
             "$BACKEND_DATABASE_URL" \
-            > "$BACKEND_DEPLOY_PATH/.env"
+            > "$BACKEND_DEPLOY_PATH/backend/.env"
 
           # Create virtual environment and install dependencies
           echo "Installing dependencies..."
-          cd "$BACKEND_DEPLOY_PATH"
+          cd "$BACKEND_DEPLOY_PATH/backend"
           export PATH="$HOME/.local/bin:$PATH"
           uv sync --frozen
 
