@@ -19,6 +19,7 @@ env:
   BACKEND_RUN_MIGRATIONS: ${{ secrets.BACKEND_RUN_MIGRATIONS }}
   BACKEND_NODE_ENV: ${{ secrets.BACKEND_NODE_ENV }}
   BACKEND_DATABASE_URL: ${{ secrets.BACKEND_DATABASE_URL }}
+  BACKEND_UPLOAD_STORAGE_DIR: ${{ secrets.BACKEND_UPLOAD_STORAGE_DIR }}
 
 jobs:
   deploy:
@@ -51,9 +52,10 @@ jobs:
 
           # Create .env file in deployment directory
           echo "Creating .env file in deployment directory..."
-          printf 'NODE_ENV=%s\nDATABASE_URL=%s\n' \
+          printf 'NODE_ENV=%s\nDATABASE_URL=%s\nUPLOAD_STORAGE_DIR=%s\n' \
             "$BACKEND_NODE_ENV" \
             "$BACKEND_DATABASE_URL" \
+            "$BACKEND_UPLOAD_STORAGE_DIR" \
             > "$BACKEND_DEPLOY_PATH/backend/.env"
 
           # Create virtual environment and install dependencies
