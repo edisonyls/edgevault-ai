@@ -7,7 +7,7 @@ import { Metric } from "@/components/ui/summary-tile";
 type AppSidebarProps = {
   documentCount: number;
   readyCount: number;
-  reviewCount: number;
+  failedCount: number;
   onPickFiles: () => void;
   isUploading: boolean;
   uploadError: string | null;
@@ -16,7 +16,7 @@ type AppSidebarProps = {
 export function AppSidebar({
   documentCount,
   readyCount,
-  reviewCount,
+  failedCount,
   onPickFiles,
   isUploading,
   uploadError,
@@ -90,7 +90,7 @@ export function AppSidebar({
         <Surface variant="transparent" className="mt-4 space-y-4">
           <Metric label="Uploaded" value={String(documentCount)} />
           <Metric label="Ready to query" value={String(readyCount)} />
-          <Metric label="Needs review" value={String(reviewCount)} />
+          <Metric label="Failed" value={String(failedCount)} />
         </Surface>
       </Surface>
     </Surface>

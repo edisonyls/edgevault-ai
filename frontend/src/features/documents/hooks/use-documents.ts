@@ -21,6 +21,10 @@ type UseDocuments = {
   deleteDocument: (id: string) => Promise<boolean>;
 };
 
+// How often to re-poll the uploads list while any document is still being processed
+// Set to 2.5s
+const PROCESSING_POLL_INTERVAL_MS = 2500;
+
 /**
  * Owns the document collection and every async operation against the uploads
  * API (load, upload, rename, delete) so view components stay presentational.
@@ -60,6 +64,39 @@ export function useDocuments(): UseDocuments {
 
     return () => controller.abort();
   }, []);
+
+  // used by the polling loop to reflect status/text changes once background OCR
+  // completes.
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const uploads = await listUploadMetadata({ signal });
+      setDocuments(uploads.map(mapUploadToDocument));
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") {
+        return;
+      }
+    }
+  }, []);
+
+  const hasProcessing = documents.some(
+    (document) => document.status === "Processing",
+  );
+
+  useEffect(() => {
+    if (!hasProcessing) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const interval = setInterval(() => {
+      void refresh(controller.signal);
+    }, PROCESSING_POLL_INTERVAL_MS);
+
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
+  }, [hasProcessing, refresh]);
 
   const clearError = useCallback(() => setError(null), []);
 

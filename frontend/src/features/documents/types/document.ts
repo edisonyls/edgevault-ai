@@ -1,4 +1,4 @@
-export type DocumentStatus = "Ready" | "Review" | "Processing";
+export type DocumentStatus = "Ready" | "Processing" | "Failed";
 
 export type DocumentType = "Bill" | "Receipt" | "Invoice" | "Statement";
 
@@ -21,4 +21,5 @@ export type VaultDocument = {
   size: string;
   amount: string;
   status: DocumentStatus;
+  text: string | null;
 };

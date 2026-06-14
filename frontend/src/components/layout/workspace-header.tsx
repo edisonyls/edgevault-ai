@@ -4,13 +4,13 @@ import { SummaryTile } from "@/components/ui/summary-tile";
 type WorkspaceHeaderProps = {
   documentCount: number;
   readyCount: number;
-  reviewCount: number;
+  failedCount: number;
 };
 
 export function WorkspaceHeader({
   documentCount,
   readyCount,
-  reviewCount,
+  failedCount,
 }: WorkspaceHeaderProps) {
   return (
     <Surface
@@ -43,7 +43,7 @@ export function WorkspaceHeader({
         >
           <SummaryTile label="Files" value={documentCount} />
           <SummaryTile label="Ready" value={readyCount} />
-          <SummaryTile label="Review" value={reviewCount} tone="amber" />
+          <SummaryTile label="Failed" value={failedCount} tone="amber" />
         </Surface>
       </Surface>
     </Surface>

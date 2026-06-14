@@ -10,6 +10,7 @@ type MobileDocumentCardProps = {
   draftName: string;
   isPending: boolean;
   onDraftNameChange: (value: string) => void;
+  onView: (document: VaultDocument) => void;
   onStartRename: (document: VaultDocument) => void;
   onSaveRename: (id: string) => void | Promise<void>;
   onCancelRename: () => void;
@@ -22,6 +23,7 @@ export function MobileDocumentCard({
   draftName,
   isPending,
   onDraftNameChange,
+  onView,
   onStartRename,
   onSaveRename,
   onCancelRename,
@@ -107,6 +109,7 @@ export function MobileDocumentCard({
         <DocumentActions
           document={document}
           isPending={isPending}
+          onView={onView}
           onStartRename={onStartRename}
           onDelete={onDelete}
         />

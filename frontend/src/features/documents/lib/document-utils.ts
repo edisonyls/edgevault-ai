@@ -81,6 +81,7 @@ export function mapUploadToDocument(
     size: formatFileSize(upload.file_size),
     amount: "Pending",
     status: mapUploadStatus(upload.status),
+    text: upload.text,
   };
 }
 
@@ -96,7 +97,7 @@ function mapUploadStatus(status: string): DocumentStatus {
     case "processed":
       return "Ready";
     case "failed":
-      return "Review";
+      return "Failed";
     case "uploaded":
     case "processing":
     default:

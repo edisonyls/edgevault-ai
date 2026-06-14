@@ -29,8 +29,8 @@ export function useDocumentChat(documents: VaultDocument[]): UseDocumentChat {
       return;
     }
 
-    const reviewCount = documents.filter(
-      (document) => document.status === "Review",
+    const failedCount = documents.filter(
+      (document) => document.status === "Failed",
     ).length;
     const totalAmount = sumDetectedAmounts(documents);
 
@@ -40,7 +40,7 @@ export function useDocumentChat(documents: VaultDocument[]): UseDocumentChat {
       {
         id: Date.now() + 1,
         role: "assistant",
-        text: `Preview answer: I found ${documents.length} uploaded documents, ${reviewCount} marked for review, and about $${totalAmount.toFixed(
+        text: `Preview answer: I found ${documents.length} uploaded documents, ${failedCount} that failed extraction, and about $${totalAmount.toFixed(
           2,
         )} across documents with detected totals.`,
       },

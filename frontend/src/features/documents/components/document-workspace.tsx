@@ -11,6 +11,7 @@ import { useDocumentChat } from "@/features/chat/hooks/use-document-chat";
 import { useDocuments } from "../hooks/use-documents";
 import type { DocumentTypeFilter, VaultDocument } from "../types/document";
 import { DocumentList } from "./document-list";
+import { DocumentTextDialog } from "./document-text-dialog";
 
 export function DocumentWorkspace() {
   const {
@@ -30,6 +31,7 @@ export function DocumentWorkspace() {
   const [selectedType, setSelectedType] = useState<DocumentTypeFilter>("All");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [viewingId, setViewingId] = useState<string | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<VaultDocument | null>(
     null,
   );
@@ -57,9 +59,12 @@ export function DocumentWorkspace() {
   const readyCount = documents.filter(
     (document) => document.status === "Ready",
   ).length;
-  const reviewCount = documents.filter(
-    (document) => document.status === "Review",
+  const failedCount = documents.filter(
+    (document) => document.status === "Failed",
   ).length;
+
+  const viewingDocument =
+    documents.find((document) => document.id === viewingId) ?? null;
 
   function openFilePicker() {
     fileInputRef.current?.click();
@@ -75,6 +80,10 @@ export function DocumentWorkspace() {
     event.target.value = "";
 
     await uploadFiles(files);
+  }
+
+  function viewDocument(document: VaultDocument) {
+    setViewingId(document.id);
   }
 
   function startRename(document: VaultDocument) {
@@ -152,7 +161,7 @@ export function DocumentWorkspace() {
         <AppSidebar
           documentCount={documents.length}
           readyCount={readyCount}
-          reviewCount={reviewCount}
+          failedCount={failedCount}
           onPickFiles={openFilePicker}
           isUploading={isUploading}
           uploadError={uploadError}
@@ -176,7 +185,7 @@ export function DocumentWorkspace() {
           <WorkspaceHeader
             documentCount={documents.length}
             readyCount={readyCount}
-            reviewCount={reviewCount}
+            failedCount={failedCount}
           />
 
           <Surface
@@ -196,6 +205,7 @@ export function DocumentWorkspace() {
               onQueryChange={setQuery}
               onSelectedTypeChange={setSelectedType}
               onDraftNameChange={setDraftName}
+              onView={viewDocument}
               onStartRename={startRename}
               onSaveRename={saveRename}
               onCancelRename={cancelRename}
@@ -214,6 +224,11 @@ export function DocumentWorkspace() {
           </Surface>
         </Surface>
       </Surface>
+
+      <DocumentTextDialog
+        document={viewingDocument}
+        onClose={() => setViewingId(null)}
+      />
 
       <ConfirmDialog
         isOpen={deleteCandidate !== null}

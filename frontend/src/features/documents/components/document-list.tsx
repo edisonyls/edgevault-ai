@@ -29,6 +29,7 @@ type DocumentListProps = {
   onQueryChange: (value: string) => void;
   onSelectedTypeChange: (value: DocumentTypeFilter) => void;
   onDraftNameChange: (value: string) => void;
+  onView: (document: VaultDocument) => void;
   onStartRename: (document: VaultDocument) => void;
   onSaveRename: (id: string) => void | Promise<void>;
   onCancelRename: () => void;
@@ -51,6 +52,7 @@ export function DocumentList({
   onQueryChange,
   onSelectedTypeChange,
   onDraftNameChange,
+  onView,
   onStartRename,
   onSaveRename,
   onCancelRename,
@@ -180,6 +182,7 @@ export function DocumentList({
                         draftName={draftName}
                         isPending={pendingDocumentId === document.id}
                         onDraftNameChange={onDraftNameChange}
+                        onView={onView}
                         onStartRename={onStartRename}
                         onSaveRename={onSaveRename}
                         onCancelRename={onCancelRename}
@@ -203,6 +206,7 @@ export function DocumentList({
                   draftName={draftName}
                   isPending={pendingDocumentId === document.id}
                   onDraftNameChange={onDraftNameChange}
+                  onView={onView}
                   onStartRename={onStartRename}
                   onSaveRename={onSaveRename}
                   onCancelRename={onCancelRename}

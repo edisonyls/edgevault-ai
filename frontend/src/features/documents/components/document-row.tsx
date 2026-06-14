@@ -9,6 +9,7 @@ type DocumentRowProps = {
   draftName: string;
   isPending: boolean;
   onDraftNameChange: (value: string) => void;
+  onView: (document: VaultDocument) => void;
   onStartRename: (document: VaultDocument) => void;
   onSaveRename: (id: string) => void | Promise<void>;
   onCancelRename: () => void;
@@ -21,6 +22,7 @@ export function DocumentRow({
   draftName,
   isPending,
   onDraftNameChange,
+  onView,
   onStartRename,
   onSaveRename,
   onCancelRename,
@@ -115,6 +117,7 @@ export function DocumentRow({
           <DocumentActions
             document={document}
             isPending={isPending}
+            onView={onView}
             onStartRename={onStartRename}
             onDelete={onDelete}
           />
