@@ -48,13 +48,9 @@ jobs:
         run: |
 
           echo "Deploying new build..."
-          sudo rm -rf "$DEPLOY_PATH"
-          sudo mkdir -p "$DEPLOY_PATH"
-          sudo cp -r dist/* "$DEPLOY_PATH/"
-
-          # Set proper permissions
-          sudo chown -R www-data:www-data "$DEPLOY_PATH"
-          sudo chmod -R 755 "$DEPLOY_PATH"
+          sudo rm -rf "$FRONTEND_DEPLOY_PATH"
+          sudo mkdir -p "$FRONTEND_DEPLOY_PATH"
+          sudo cp -r dist/* "$FRONTEND_DEPLOY_PATH/"
 
           # Restart nginx to ensure changes take effect
           sudo systemctl restart nginx
