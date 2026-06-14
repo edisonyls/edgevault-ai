@@ -7,7 +7,6 @@ import {
   Table,
   Typography,
 } from "@heroui/react";
-import { IconFile, IconSearch, IconUpload } from "@/components/icons";
 import { DocumentListSkeleton } from "./document-list-skeleton";
 import { DocumentRow } from "./document-row";
 import { MobileDocumentCard } from "./mobile-document-card";
@@ -97,12 +96,9 @@ export function DocumentList({
             className="w-full sm:w-72"
           >
             <SearchField.Group className="flex min-h-11 items-center rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 transition focus-within:border-indigo-600 focus-within:ring-2 focus-within:ring-indigo-600">
-              <SearchField.SearchIcon>
-                <IconSearch className="size-4 text-slate-400" />
-              </SearchField.SearchIcon>
               <SearchField.Input
                 placeholder="Search files or vendors"
-                className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-400"
+                className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm outline-none placeholder:text-slate-400"
               />
               <SearchField.ClearButton className="text-slate-400 hover:text-slate-700" />
             </SearchField.Group>
@@ -239,13 +235,7 @@ function EmptyDocumentState({
       variant="transparent"
       className="flex flex-col items-center px-6 py-16 text-center"
     >
-      <Surface
-        variant="transparent"
-        className="grid size-12 place-items-center rounded-full bg-slate-100 text-slate-500"
-      >
-        <IconFile className="size-6" />
-      </Surface>
-      <Typography.Paragraph className="mt-4 text-base font-semibold text-slate-950">
+      <Typography.Paragraph className="text-base font-semibold text-slate-950">
         {hasActiveFilters
           ? "No documents match your filters"
           : "No documents yet"}
@@ -271,9 +261,8 @@ function EmptyDocumentState({
           variant="primary"
           onPress={onPickFiles}
           isDisabled={isUploading}
-          className="mt-5 min-h-11 gap-2 rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
+          className="mt-5 min-h-11 rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
         >
-          <IconUpload className="size-4" />
           {isUploading ? "Uploading…" : "Upload your first document"}
         </Button>
       )}

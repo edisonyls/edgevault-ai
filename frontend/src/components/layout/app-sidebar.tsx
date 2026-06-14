@@ -2,7 +2,6 @@
 
 import { Button, Link, Separator, Surface, Typography } from "@heroui/react";
 import { workspaceNavigation } from "@/config/navigation";
-import { IconSpark, IconUpload } from "@/components/icons";
 import { Metric } from "@/components/ui/summary-tile";
 
 type AppSidebarProps = {
@@ -25,7 +24,7 @@ export function AppSidebar({
   return (
     <Surface
       render={(props) => <aside {...props} />}
-      className="border-b border-slate-200 bg-white px-5 py-4 lg:w-64 lg:border-b-0 lg:border-r lg:px-6 lg:py-6"
+      className="sticky top-0 z-30 border-b border-slate-200 bg-white px-5 py-4 lg:static lg:w-64 lg:border-b-0 lg:border-r lg:px-6 lg:py-6"
     >
       <Surface
         variant="transparent"
@@ -34,9 +33,9 @@ export function AppSidebar({
         <Surface variant="transparent" className="flex items-center gap-3">
           <Surface
             variant="transparent"
-            className="grid size-10 place-items-center rounded-md bg-slate-950 text-white"
+            className="grid size-10 shrink-0 place-items-center rounded-md bg-slate-950 text-sm font-bold tracking-tight text-white"
           >
-            <IconSpark className="size-5" />
+            EV
           </Surface>
           <Surface variant="transparent">
             <Typography.Paragraph className="text-base font-semibold">
@@ -51,11 +50,10 @@ export function AppSidebar({
         <Button
           type="button"
           variant="primary"
-          className="min-h-11 gap-2 rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 lg:mt-8 lg:w-full"
+          className="min-h-11 rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 lg:mt-8 lg:w-full"
           onPress={onPickFiles}
           isDisabled={isUploading}
         >
-          <IconUpload className="size-4" />
           {isUploading ? "Uploading…" : "Upload"}
         </Button>
         {uploadError && (

@@ -1,5 +1,4 @@
 import { Button, Chip, Input, Surface, Typography } from "@heroui/react";
-import { IconFile } from "@/components/icons";
 import { Detail } from "@/components/ui/detail";
 import { statusColor, typeColor } from "../lib/document-display";
 import type { VaultDocument } from "../types/document";
@@ -35,12 +34,6 @@ export function MobileDocumentCard({
       className="p-4"
     >
       <Surface variant="transparent" className="flex gap-3">
-        <Surface
-          variant="transparent"
-          className="grid size-10 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600"
-        >
-          <IconFile className="size-5" />
-        </Surface>
         <Surface variant="transparent" className="min-w-0 flex-1">
           {isEditing ? (
             <Surface variant="transparent" className="space-y-2">
@@ -91,28 +84,26 @@ export function MobileDocumentCard({
         <Detail label="Uploaded" value={document.uploadedAt} />
       </Surface>
 
-      <Surface
-        variant="transparent"
-        className="mt-4 flex flex-wrap items-center justify-between gap-3"
-      >
-        <Surface variant="transparent" className="flex flex-wrap gap-2">
-          <Chip
-            color={typeColor(document.type)}
-            size="sm"
-            variant="soft"
-            className="rounded-md text-xs font-semibold"
-          >
-            {document.type}
-          </Chip>
-          <Chip
-            color={statusColor(document.status)}
-            size="sm"
-            variant="soft"
-            className="rounded-md border text-xs font-semibold"
-          >
-            {document.status}
-          </Chip>
-        </Surface>
+      <Surface variant="transparent" className="mt-4 flex flex-wrap gap-2">
+        <Chip
+          color={typeColor(document.type)}
+          size="sm"
+          variant="soft"
+          className="rounded-md text-xs font-semibold"
+        >
+          {document.type}
+        </Chip>
+        <Chip
+          color={statusColor(document.status)}
+          size="sm"
+          variant="soft"
+          className="rounded-md border text-xs font-semibold"
+        >
+          {document.status}
+        </Chip>
+      </Surface>
+
+      <Surface variant="transparent" className="mt-4 flex">
         <DocumentActions
           document={document}
           isPending={isPending}

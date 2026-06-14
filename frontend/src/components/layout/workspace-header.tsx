@@ -27,11 +27,11 @@ export function WorkspaceHeader({
           </Typography.Paragraph>
           <Typography.Heading
             level={1}
-            className="mt-2 text-3xl font-semibold tracking-tight text-slate-950"
+            className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl"
           >
             Your documents
           </Typography.Heading>
-          <Typography.Paragraph className="mt-2 text-base leading-7 text-slate-600">
+          <Typography.Paragraph className="mt-2 text-sm leading-6 text-slate-600 sm:text-base sm:leading-7">
             Review uploaded files, tidy up names and duplicates, and ask
             questions about them with AI-assisted lookup.
           </Typography.Paragraph>

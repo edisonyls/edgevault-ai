@@ -1,5 +1,4 @@
 import { Button, Chip, Input, Surface, Table, Typography } from "@heroui/react";
-import { IconFile } from "@/components/icons";
 import { statusColor, typeColor } from "../lib/document-display";
 import type { VaultDocument } from "../types/document";
 import { DocumentActions } from "./document-actions";
@@ -37,12 +36,6 @@ export function DocumentRow({
           variant="transparent"
           className="flex min-w-0 items-start gap-3"
         >
-          <Surface
-            variant="transparent"
-            className="grid size-10 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600"
-          >
-            <IconFile className="size-5" />
-          </Surface>
           <Surface variant="transparent" className="min-w-0">
             {isEditing ? (
               <Surface

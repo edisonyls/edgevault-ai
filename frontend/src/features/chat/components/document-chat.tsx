@@ -1,6 +1,5 @@
 import type { FormEvent } from "react";
 import { Button, Form, Input, Surface, Typography } from "@heroui/react";
-import { IconSend, IconSpark } from "@/components/icons";
 import type { ChatMessage } from "../types/chat-message";
 
 const suggestedPrompts = [
@@ -25,30 +24,19 @@ export function DocumentChat({
   return (
     <Surface
       render={(props) => <aside {...props} />}
-      className="flex min-h-[620px] flex-col bg-white px-5 py-5 sm:px-6 lg:px-8 xl:px-6"
+      className="flex min-h-[480px] flex-col bg-white px-5 py-5 sm:px-6 lg:min-h-[620px] lg:px-8 xl:px-6"
     >
-      <Surface
-        variant="transparent"
-        className="flex items-start justify-between gap-4"
-      >
-        <Surface variant="transparent">
-          <Typography.Heading
-            level={2}
-            className="text-xl font-semibold text-slate-950"
-          >
-            Document chat
-          </Typography.Heading>
-          <Typography.Paragraph className="mt-1 text-sm leading-6 text-slate-500">
-            Ask questions about your uploaded files — totals, vendors, due
-            dates, and more.
-          </Typography.Paragraph>
-        </Surface>
-        <Surface
-          variant="transparent"
-          className="grid size-11 shrink-0 place-items-center rounded-md bg-indigo-50 text-indigo-700"
+      <Surface variant="transparent">
+        <Typography.Heading
+          level={2}
+          className="text-xl font-semibold text-slate-950"
         >
-          <IconSpark className="size-5" />
-        </Surface>
+          Document chat
+        </Typography.Heading>
+        <Typography.Paragraph className="mt-1 text-sm leading-6 text-slate-500">
+          Ask questions about your uploaded files — totals, vendors, due dates,
+          and more.
+        </Typography.Paragraph>
       </Surface>
 
       <Surface variant="transparent" className="mt-4 flex flex-wrap gap-2">
@@ -102,11 +90,10 @@ export function DocumentChat({
         <Button
           type="submit"
           variant="primary"
-          isIconOnly
           aria-label="Send message"
-          className="grid min-h-11 min-w-11 place-items-center rounded-md bg-slate-950 text-white transition hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2"
+          className="grid min-h-11 shrink-0 place-items-center rounded-md bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2"
         >
-          <IconSend className="size-5" />
+          Send
         </Button>
       </Form>
     </Surface>
