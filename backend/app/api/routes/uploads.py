@@ -1,17 +1,31 @@
 from typing import Annotated, NoReturn
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 
 from app.core.config import Settings, get_settings
 from app.core.database import DatabasePoolDep
+from app.repositories.document_extractions import DocumentExtractionRepository
 from app.repositories.uploads import UploadRepository
+from app.schemas.document_extractions import DocumentExtractionResponse
 from app.schemas.uploads import (
     UploadDeleteResponse,
     UploadMetadataResponse,
     UploadMetadataUpdate,
     UploadStatus,
 )
+from app.services.document_extraction import DocumentExtractionService
+from app.services.ocr.base import OcrEngine
+from app.services.ocr.tesseract import TesseractEngine
 from app.services.uploads import (
     UploadConflictError,
     UploadNotFoundError,
@@ -34,6 +48,31 @@ def get_upload_service(database_pool: DatabasePoolDep, settings: SettingsDep) ->
 
 
 type UploadServiceDep = Annotated[UploadService, Depends(get_upload_service)]
+
+
+def get_ocr_engine(settings: SettingsDep) -> OcrEngine:
+    # Currently using the Tesseract engine but in the future we will swap to Hailo
+    return TesseractEngine(language=settings.ocr_language)
+
+
+# Get the document extraction service.
+def get_document_extraction_service(
+    database_pool: DatabasePoolDep,
+    settings: SettingsDep,
+    engine: Annotated[OcrEngine, Depends(get_ocr_engine)],
+) -> DocumentExtractionService:
+    return DocumentExtractionService(
+        extraction_repository=DocumentExtractionRepository(database_pool),
+        upload_repository=UploadRepository(database_pool),
+        engine=engine,
+        pdf_text_threshold=settings.ocr_pdf_text_threshold,
+        pdf_render_dpi=settings.ocr_pdf_render_dpi,
+    )
+
+
+type DocumentExtractionServiceDep = Annotated[
+    DocumentExtractionService, Depends(get_document_extraction_service)
+]
 
 
 def raise_upload_http_exception(exc: UploadServiceError) -> NoReturn:
@@ -74,12 +113,34 @@ def raise_upload_http_exception(exc: UploadServiceError) -> NoReturn:
 )
 async def create_upload_metadata(
     upload_service: UploadServiceDep,
+    extraction_service: DocumentExtractionServiceDep,
+    settings: SettingsDep,
+    background_tasks: BackgroundTasks,
     file: Annotated[UploadFile, File()],
 ) -> UploadMetadataResponse:
     try:
-        return await upload_service.create_upload(file=file)
+        # First create the upload metadata and store the file
+        upload = await upload_service.create_upload(file=file)
+
+        if not settings.ocr_enabled or upload.file_path is None:
+            return upload
+
+        # Mark the upload as processing.
+        upload = await upload_service.mark_processing(upload.id)
+
+        # Resolve the storage path for the uploaded file.
+        storage_path = upload_service.resolve_storage_path(upload.file_path)
     except UploadServiceError as exc:
         raise_upload_http_exception(exc)
+
+    # Kick off the document extraction in the background.
+    background_tasks.add_task(
+        extraction_service.run,
+        upload_id=upload.id,
+        storage_path=storage_path,
+        mime_type=upload.mime_type,
+    )
+    return upload
 
 
 @router.get("", response_model=list[UploadMetadataResponse])
@@ -106,6 +167,23 @@ async def get_upload_metadata(
         return await upload_service.get_upload_metadata(upload_id)
     except UploadServiceError as exc:
         raise_upload_http_exception(exc)
+
+
+@router.get(
+    "/{upload_id}/extractions",
+    response_model=list[DocumentExtractionResponse],
+)
+async def list_document_extractions(
+    upload_service: UploadServiceDep,
+    extraction_service: DocumentExtractionServiceDep,
+    upload_id: UUID,
+) -> list[DocumentExtractionResponse]:
+    try:
+        await upload_service.get_upload_metadata(upload_id)
+    except UploadServiceError as exc:
+        raise_upload_http_exception(exc)
+
+    return await extraction_service.list_extractions(upload_id)
 
 
 @router.patch("/{upload_id}", response_model=UploadMetadataResponse)

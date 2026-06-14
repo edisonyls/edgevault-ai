@@ -9,6 +9,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 Environment = Literal["local", "development", "staging", "production"]
 DATABASE_POOL_MIN_SIZE = 1
 DATABASE_POOL_MAX_SIZE = 5
+OCR_PDF_TEXT_THRESHOLD = 20
+OCR_PDF_RENDER_DPI = 200
 
 
 class Settings(BaseSettings):
@@ -25,6 +27,11 @@ class Settings(BaseSettings):
     database_pool_min_size: int = DATABASE_POOL_MIN_SIZE
     database_pool_max_size: int = DATABASE_POOL_MAX_SIZE
     upload_storage_dir: Path = Path("var/uploads")
+    ocr_enabled: bool = True
+    ocr_engine: str = "tesseract"
+    ocr_language: str = "eng"
+    ocr_pdf_text_threshold: int = OCR_PDF_TEXT_THRESHOLD
+    ocr_pdf_render_dpi: int = OCR_PDF_RENDER_DPI
 
     model_config = SettingsConfigDict(
         env_file=find_dotenv(usecwd=True) or None,

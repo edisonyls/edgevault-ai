@@ -120,6 +120,7 @@ class UploadService:
         self.upload_repository = upload_repository
         self.upload_storage_dir = upload_storage_dir
 
+    # Resolve the storage path for a given file path, ensuring it is within the upload storage directory.
     def resolve_storage_path(self, file_path: str) -> Path:
         relative_path = PurePosixPath(file_path)
 
@@ -227,6 +228,16 @@ class UploadService:
             offset=offset,
         )
         return [row_to_upload_metadata(row) for row in rows]
+
+    # Mark the upload as processing and return the updated metadata.
+    async def mark_processing(self, upload_id: UUID) -> UploadMetadataResponse:
+        # Update the upload status to "processing" and return the updated metadata.
+        row = await self.upload_repository.update(upload_id, {"status": "processing"})
+
+        if row is None:
+            raise UploadNotFoundError("Upload not found.")
+
+        return row_to_upload_metadata(row)
 
     async def get_upload_metadata(self, upload_id: UUID) -> UploadMetadataResponse:
         row = await self.upload_repository.get(upload_id)
