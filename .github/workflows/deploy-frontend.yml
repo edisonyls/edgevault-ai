@@ -24,7 +24,16 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install
 
       - name: Build frontend
         working-directory: frontend
@@ -37,10 +46,17 @@ jobs:
       - name: Deploy frontend build
         working-directory: frontend
         run: |
-          mkdir -p "$FRONTEND_DEPLOY_PATH"
-          rsync -az --delete \
-            --exclude ".env*" \
-            --exclude "node_modules" \
-            ./ "$FRONTEND_DEPLOY_PATH/"
-          cd "$FRONTEND_DEPLOY_PATH"
-          npm ci --omit=dev
+
+          echo "Deploying new build..."
+          sudo rm -rf "$DEPLOY_PATH"
+          sudo mkdir -p "$DEPLOY_PATH"
+          sudo cp -r dist/* "$DEPLOY_PATH/"
+
+          # Set proper permissions
+          sudo chown -R www-data:www-data "$DEPLOY_PATH"
+          sudo chmod -R 755 "$DEPLOY_PATH"
+
+          # Restart nginx to ensure changes take effect
+          sudo systemctl restart nginx
+
+          echo "DEV deployment completed successfully!"
