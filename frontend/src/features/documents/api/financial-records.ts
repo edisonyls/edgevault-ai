@@ -8,9 +8,19 @@ const apiBaseUrl = process.env
   .replace(/\/$/, "");
 
 export async function listFinancialRecords(
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; limit?: number } = {},
 ): Promise<FinancialRecord[]> {
-  const response = await fetch(`${apiBaseUrl}/financial-records`, {
+  const query = new URLSearchParams();
+  if (options.limit !== undefined) {
+    query.set("limit", String(options.limit));
+  }
+
+  const queryString = query.toString();
+  const url = `${apiBaseUrl}/financial-records${
+    queryString ? `?${queryString}` : ""
+  }`;
+
+  const response = await fetch(url, {
     method: "GET",
     signal: options.signal,
   });

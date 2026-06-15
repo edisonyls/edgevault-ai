@@ -1,4 +1,5 @@
 export const workspaceNavigation = [
+  { label: "Dashboard", href: "/dashboard" },
   { label: "Documents", href: "/" },
   { label: "Review queue", href: "#", isActive: false },
   { label: "Vendors", href: "/vendors" },
