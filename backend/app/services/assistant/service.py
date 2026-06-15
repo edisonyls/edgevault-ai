@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
@@ -11,6 +12,8 @@ from app.schemas.assistant import (
 )
 from app.services.assistant.intent import ALL_TIME, Intent, parse_intent
 from app.services.assistant.llm_intent import LLMIntentParser
+
+logger = logging.getLogger(__name__)
 
 # How many evidence records to attach to an answer.
 EVIDENCE_LIMIT = 10
@@ -139,7 +142,12 @@ class AssistantService:
         for parser, source in tiers:
             if parser is None:
                 continue
-            resolved = await parser.parse(question, today)
+            try:
+                resolved = await parser.parse(question, today)
+            except Exception:
+                logger.exception(
+                    "Assistant %s tier failed; falling through.", source)
+                continue
             if resolved is not None and resolved.query_type != "unknown":
                 return resolved, source
 

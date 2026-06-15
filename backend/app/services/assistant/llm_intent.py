@@ -96,9 +96,9 @@ class LLMIntentParser:
         query_type = parsed.get("query_type")
         category = parsed.get("category")
 
-        if query_type not in _QUERY_TYPES:
+        if not isinstance(query_type, str) or query_type not in _QUERY_TYPES:
             return None
-        if category not in _CATEGORIES:
+        if not isinstance(category, str) or category not in _CATEGORIES:
             category = None
 
         # category_total is meaningless without a category; let the next tier try.
