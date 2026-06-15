@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Link, Separator, Surface, Typography } from "@heroui/react";
+import { usePathname } from "next/navigation";
 import { workspaceNavigation } from "@/config/navigation";
 import { Metric } from "@/components/ui/summary-tile";
 
@@ -21,6 +22,8 @@ export function AppSidebar({
   isUploading,
   uploadError,
 }: AppSidebarProps) {
+  const pathname = usePathname();
+
   return (
     <Surface
       render={(props) => <aside {...props} />}
@@ -67,19 +70,28 @@ export function AppSidebar({
       </Surface>
 
       <nav className="mt-5 hidden space-y-1 lg:block" aria-label="Workspace">
-        {workspaceNavigation.map((item) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            className={`flex min-h-11 items-center rounded-md px-3 text-sm font-medium transition focus:ring-2 focus:ring-indigo-600 ${
-              item.isActive
-                ? "bg-slate-950 text-white"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-            }`}
-          >
-            {item.label}
-          </Link>
-        ))}
+        {workspaceNavigation.map((item) => {
+          const isCurrent =
+            item.href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(item.href);
+          const itemClassName = `flex min-h-11 w-full items-center rounded-md px-3 text-left text-sm font-medium transition focus:ring-2 focus:ring-indigo-600 ${
+            isCurrent
+              ? "bg-slate-950 text-white"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+          }`;
+
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={itemClassName}
+              aria-current={isCurrent ? "page" : undefined}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
 
       <Surface variant="transparent" className="mt-6 hidden lg:block">
