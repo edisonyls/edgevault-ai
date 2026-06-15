@@ -95,8 +95,11 @@ export function useDocuments(): UseDocuments {
     }
   }, []);
 
+  // Keep polling while any document is still moving through the pipeline so the
+  //  list reflects the final 'processed'/'failed' state.
   const hasProcessing = documents.some(
-    (document) => document.status === "Processing",
+    (document) =>
+      document.status === "Processing" || document.status === "Indexing",
   );
 
   useEffect(() => {

@@ -14,6 +14,9 @@ export async function searchDocuments(
   if (q) {
     query.set("q", q);
   }
+  if (filters.mode !== "keyword") {
+    query.set("mode", filters.mode);
+  }
   if (filters.category !== "all") {
     query.set("category", filters.category);
   }

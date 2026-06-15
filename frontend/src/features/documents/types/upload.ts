@@ -1,4 +1,9 @@
-export type UploadStatus = "uploaded" | "processing" | "processed" | "failed";
+export type UploadStatus =
+  | "uploaded"
+  | "processing"
+  | "indexing"
+  | "processed"
+  | "failed";
 
 export type UploadMetadataResponse = {
   id: string;

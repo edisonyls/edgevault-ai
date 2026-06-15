@@ -106,7 +106,9 @@ export function DocumentTextDialog({
         >
           <FinancialRecordPanel
             uploadId={doc.id}
-            isProcessing={doc.status === "Processing"}
+            isProcessing={
+              doc.status === "Processing" || doc.status === "Indexing"
+            }
             onSaved={onRecordSaved}
           />
 

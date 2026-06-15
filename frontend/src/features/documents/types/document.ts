@@ -1,4 +1,4 @@
-export type DocumentStatus = "Ready" | "Processing" | "Failed";
+export type DocumentStatus = "Ready" | "Processing" | "Indexing" | "Failed";
 
 export type DocumentType = "Bill" | "Receipt" | "Invoice" | "Statement";
 

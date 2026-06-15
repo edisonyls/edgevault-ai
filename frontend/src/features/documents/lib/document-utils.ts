@@ -100,7 +100,7 @@ export function mapUploadToDocument(
 }
 
 function defaultVendorLabel(status: DocumentStatus): string {
-  if (status === "Processing") {
+  if (status === "Processing" || status === "Indexing") {
     return "Extracting…";
   }
 
@@ -108,7 +108,7 @@ function defaultVendorLabel(status: DocumentStatus): string {
 }
 
 function defaultAmountLabel(status: DocumentStatus): string {
-  if (status === "Processing") {
+  if (status === "Processing" || status === "Indexing") {
     return "Pending";
   }
 
@@ -143,6 +143,8 @@ function mapUploadStatus(status: string): DocumentStatus {
   switch (status.toLowerCase()) {
     case "processed":
       return "Ready";
+    case "indexing":
+      return "Indexing";
     case "failed":
       return "Failed";
     case "uploaded":

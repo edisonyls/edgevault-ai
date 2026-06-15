@@ -12,8 +12,11 @@ export type SearchResult = {
   rank: number | null;
 };
 
+export type SearchMode = "keyword" | "semantic" | "hybrid";
+
 export type SearchFilters = {
   q: string;
+  mode: SearchMode;
   category: FinancialCategory | "all";
   documentType: FinancialDocumentType | "all";
   vendor: string;
@@ -23,6 +26,7 @@ export type SearchFilters = {
 
 export const EMPTY_SEARCH_FILTERS: SearchFilters = {
   q: "",
+  mode: "keyword",
   category: "all",
   documentType: "all",
   vendor: "",

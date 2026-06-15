@@ -19,6 +19,8 @@ export function statusColor(status: VaultDocument["status"]) {
       return "success";
     case "Processing":
       return "accent";
+    case "Indexing":
+      return "warning";
     case "Failed":
       return "danger";
   }

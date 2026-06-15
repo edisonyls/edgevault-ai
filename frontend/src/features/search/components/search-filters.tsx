@@ -1,15 +1,21 @@
 "use client";
 
 import { Button, Input, Surface, Typography } from "@heroui/react";
-import { Search, X } from "lucide-react";
+import { Search, Sparkles, X } from "lucide-react";
 import {
   CATEGORY_OPTIONS,
   DOCUMENT_TYPE_OPTIONS,
 } from "@/features/documents/lib/financial-display";
-import type { SearchFilters } from "../types/search";
+import type { SearchFilters, SearchMode } from "../types/search";
 
 const FIELD_CLASS =
   "min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600";
+
+const SEARCH_MODES: { value: SearchMode; label: string }[] = [
+  { value: "keyword", label: "Keyword" },
+  { value: "semantic", label: "Semantic" },
+  { value: "hybrid", label: "Hybrid" },
+];
 
 type SearchFiltersBarProps = {
   filters: SearchFilters;
@@ -39,6 +45,47 @@ export function SearchFiltersBar({
           className="min-h-12 w-full rounded-md border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-600"
         />
       </label>
+
+      <Surface
+        variant="transparent"
+        className="mt-3 flex flex-wrap items-center gap-3"
+      >
+        <Surface
+          variant="transparent"
+          role="group"
+          aria-label="Search mode"
+          className="inline-flex rounded-md border border-slate-300 bg-slate-50 p-0.5"
+        >
+          {SEARCH_MODES.map((option) => {
+            const isActive = filters.mode === option.value;
+            return (
+              <Button
+                key={option.value}
+                type="button"
+                variant="ghost"
+                aria-pressed={isActive}
+                onPress={() => onChange({ mode: option.value })}
+                className={`min-h-9 rounded-[5px] px-3 text-sm font-semibold transition focus:ring-2 focus:ring-indigo-600 ${
+                  isActive
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                {option.value !== "keyword" ? (
+                  <Sparkles className="size-4" aria-hidden />
+                ) : null}
+                {option.label}
+              </Button>
+            );
+          })}
+        </Surface>
+
+        {filters.mode !== "keyword" && filters.q.trim().length === 0 ? (
+          <Typography.Paragraph className="text-xs text-slate-500">
+            Type a query to use {filters.mode} search by meaning.
+          </Typography.Paragraph>
+        ) : null}
+      </Surface>
 
       <Surface
         variant="transparent"
