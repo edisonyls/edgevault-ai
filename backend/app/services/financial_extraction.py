@@ -38,7 +38,15 @@ TOTAL_KEYWORDS: list[tuple[str, int]] = [
     ("total", 1),
 ]
 
+LOOKAHEAD_MIN_WEIGHT = 3
+VALUE_LOOKAHEAD_LINES = 2
+MAX_LABEL_WORDS = 6
+
 AMOUNT_RE = re.compile(r"\d[\d,]*\.\d{2}")
+
+CURRENCY_AMOUNT_RE = re.compile(
+    r"(?P<sym>[$€£])?\s?(?P<num>\d[\d,]*\.\d{2})(?!\d)(?!\s?%)"
+)
 NUMERIC_DATE_RE = re.compile(r"\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b")
 ISO_DATE_RE = re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b")
 TEXT_DATE_RE = re.compile(
@@ -172,18 +180,52 @@ def _guess_vendor_from_header(text: str) -> str | None:
     return None
 
 
-# Detect the total amount by looking for lines containing total-related
-# keywords, then falling back to any amount-looking text if no keywords are found.
-def _detect_total(text: str, lines: list[str]) -> Decimal | None:
-    best: tuple[int, Decimal] | None = None
+# Extract every currency amount on a line, flagging which ones carried an
+# explicit currency symbol so a "$xxx" can be preferred over a bare "xxx".
+def _currency_amounts(line: str) -> list[tuple[bool, Decimal]]:
+    found: list[tuple[bool, Decimal]] = []
+    for match in CURRENCY_AMOUNT_RE.finditer(line):
+        amount = _parse_amount(match.group("num"))
+        if amount is not None:
+            found.append((match.group("sym") is not None, amount))
+    return found
 
-    for line in lines:
+
+# Choose the amount that best represents a line's value
+def _pick_line_amount(amounts: list[tuple[bool, Decimal]]) -> tuple[bool, Decimal]:
+    symboled = [amount for has_symbol, amount in amounts if has_symbol]
+    if symboled:
+        return True, symboled[-1]
+    return False, amounts[-1][1]
+
+
+def _is_label_line(line: str) -> bool:
+    return len(line.split()) <= MAX_LABEL_WORDS
+
+
+# When a label sits on its own line, scan the next few non-empty lines for the
+# value printed beneath it.
+def _lookahead_amount(lines: list[str], start: int) -> tuple[bool, Decimal] | None:
+    seen = 0
+    for line in lines[start + 1:]:
+        if not line.strip():
+            continue
+        amounts = _currency_amounts(line)
+        if amounts:
+            return _pick_line_amount(amounts)
+        seen += 1
+        if seen >= VALUE_LOOKAHEAD_LINES:
+            break
+    return None
+
+
+# Detect the total amount by looking for lines containing total-related keywords.
+def _detect_total(text: str, lines: list[str]) -> Decimal | None:
+    best: tuple[int, bool, int, Decimal] | None = None
+
+    for idx, line in enumerate(lines):
         lowered = line.lower()
         if "subtotal" in lowered:
-            continue
-
-        amounts = AMOUNT_RE.findall(line)
-        if not amounts:
             continue
 
         weight = max(
@@ -193,20 +235,26 @@ def _detect_total(text: str, lines: list[str]) -> Decimal | None:
         if weight == 0:
             continue
 
-        amount = _parse_amount(amounts[-1])
-        if amount is None:
+        amounts = _currency_amounts(line)
+        if amounts:
+            has_symbol, amount = _pick_line_amount(amounts)
+        elif weight >= LOOKAHEAD_MIN_WEIGHT and _is_label_line(line):
+            picked = _lookahead_amount(lines, idx)
+            if picked is None:
+                continue
+            has_symbol, amount = picked
+        else:
             continue
 
-        # >= lets a later line of equal weight win, since the grand total is
-        # usually the last total-looking line on the page.
-        if best is None or weight >= best[0]:
-            best = (weight, amount)
+        candidate = (weight, has_symbol, idx, amount)
+        if best is None or candidate[:3] >= best[:3]:
+            best = candidate
 
     if best is not None:
-        return best[1]
+        return best[3]
 
-    all_amounts = [parsed for raw in AMOUNT_RE.findall(
-        text) if (parsed := _parse_amount(raw))]
+    all_amounts = [amount for line in lines for _,
+                   amount in _currency_amounts(line)]
     return max(all_amounts) if all_amounts else None
 
 
