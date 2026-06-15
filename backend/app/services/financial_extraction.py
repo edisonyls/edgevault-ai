@@ -1,5 +1,6 @@
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -8,6 +9,7 @@ from uuid import UUID
 from asyncpg import Record
 
 from app.repositories.financial_records import FinancialRecordRepository
+from app.repositories.vendor_rules import VendorRuleRepository
 from app.schemas.financial_records import (
     FinancialCategory,
     FinancialDocumentType,
@@ -23,8 +25,10 @@ DEFAULT_CURRENCY = "AUD"
 MAX_VENDOR_GUESS_LENGTH = 60
 
 # keyword (matched case-insensitively, word-boundary) -> canonical vendor, category.
+VendorRule = tuple[str, str, FinancialCategory]
+
 # Ordered so the earliest occurrence in the text wins when several vendors appear.
-VENDOR_RULES: list[tuple[str, str, FinancialCategory]] = [
+VENDOR_RULES: list[VendorRule] = [
     ("woolworths", "Woolworths", "groceries"),
     ("coles", "Coles", "groceries"),
     ("aldi", "ALDI", "groceries"),
@@ -150,17 +154,34 @@ def _parse_amount(raw: str) -> Decimal | None:
 
 
 # Detect the vendor and category based on known keywords, or heuristics if no known vendor is found.
-def _detect_vendor(text: str) -> tuple[str | None, FinancialCategory | None]:
-    lowered = text.lower()
+def _match_rules(
+    lowered: str,
+    rules: Sequence[VendorRule],
+) -> tuple[str, FinancialCategory] | None:
     best: tuple[int, str, FinancialCategory] | None = None
 
-    for keyword, vendor, category in VENDOR_RULES:
+    for keyword, vendor, category in rules:
         match = re.search(rf"\b{re.escape(keyword)}\b", lowered)
         if match and (best is None or match.start() < best[0]):
             best = (match.start(), vendor, category)
 
-    if best is not None:
-        return best[1], best[2]
+    return (best[1], best[2]) if best is not None else None
+
+
+# Detect the vendor and category based on known keywords, then heuristics if
+# no known vendor is found.
+def _detect_vendor(
+    text: str,
+    learned_rules: Sequence[VendorRule] = (),
+) -> tuple[str | None, FinancialCategory | None]:
+    lowered = text.lower()
+    learned = _match_rules(lowered, learned_rules)
+    if learned is not None:
+        return learned
+
+    builtin = _match_rules(lowered, VENDOR_RULES)
+    if builtin is not None:
+        return builtin
 
     return _guess_vendor_from_header(text), None
 
@@ -310,10 +331,14 @@ def _score_confidence(result: ExtractedFinancials, vendor_is_known: bool) -> flo
     return round(min(score, 0.95), 2)
 
 
-# Turn the OCR text into structured financial fields using deterministic rules, then persist them.
-def extract_financials(text: str) -> ExtractedFinancials:
+# Turn the OCR text into structured financial fields using deterministic rules,
+# then persist them.
+def extract_financials(
+    text: str,
+    learned_rules: Sequence[VendorRule] = (),
+) -> ExtractedFinancials:
     lines = text.splitlines()
-    vendor, category = _detect_vendor(text)
+    vendor, category = _detect_vendor(text, learned_rules)
     vendor_is_known = category is not None
     document_type = _detect_document_type(text)
     transaction_date, due_date = _detect_dates(lines)
@@ -355,8 +380,17 @@ def row_to_financial_record(row: Record) -> FinancialRecordResponse:
 
 
 class FinancialRecordService:
-    def __init__(self, repository: FinancialRecordRepository) -> None:
+    def __init__(
+        self,
+        repository: FinancialRecordRepository,
+        vendor_rule_repository: VendorRuleRepository,
+    ) -> None:
         self.repository = repository
+        self.vendor_rule_repository = vendor_rule_repository
+
+    async def _load_learned_rules(self) -> list[VendorRule]:
+        rows = await self.vendor_rule_repository.list_all()
+        return [(row["keyword"], row["vendor"], row["category"]) for row in rows]
 
     # Run the rules engine over OCR text and persist the structured record.
     async def extract_and_store(self, *, upload_id: UUID, text: str | None) -> None:
@@ -366,7 +400,8 @@ class FinancialRecordService:
         if not text or not text.strip():
             return
 
-        extracted = extract_financials(text)
+        learned_rules = await self._load_learned_rules()
+        extracted = extract_financials(text, learned_rules)
         await self.repository.upsert_from_extraction(
             upload_id=upload_id,
             document_type=extracted.document_type,
@@ -412,4 +447,28 @@ class FinancialRecordService:
             return row_to_financial_record(existing) if existing is not None else None
 
         row = await self.repository.update(record_id, update_data)
-        return row_to_financial_record(row) if row is not None else None
+        if row is None:
+            return None
+
+        # A correction to vendor or category teaches a reusable rule so future
+        # documents mentioning this vendor are categorised automatically.
+        if "vendor" in update_data or "category" in update_data:
+            await self._learn_rule_from_record(row)
+
+        return row_to_financial_record(row)
+
+    async def _learn_rule_from_record(self, row: Record) -> None:
+        vendor = (row["vendor"] or "").strip()
+        category = (row["category"] or "").strip()
+        if not vendor or not category:
+            return
+
+        try:
+            await self.vendor_rule_repository.upsert(
+                keyword=vendor.lower(),
+                vendor=vendor,
+                category=category,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to learn vendor rule from record %s", row["id"])

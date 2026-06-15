@@ -17,6 +17,7 @@ from app.core.database import DatabasePoolDep
 from app.repositories.document_extractions import DocumentExtractionRepository
 from app.repositories.financial_records import FinancialRecordRepository
 from app.repositories.uploads import UploadRepository
+from app.repositories.vendor_rules import VendorRuleRepository
 from app.schemas.document_extractions import DocumentExtractionResponse
 from app.schemas.financial_records import FinancialRecordResponse
 from app.schemas.uploads import (
@@ -59,7 +60,10 @@ def get_ocr_engine(settings: SettingsDep) -> OcrEngine:
 
 
 def get_financial_record_service(database_pool: DatabasePoolDep) -> FinancialRecordService:
-    return FinancialRecordService(FinancialRecordRepository(database_pool))
+    return FinancialRecordService(
+        FinancialRecordRepository(database_pool),
+        VendorRuleRepository(database_pool),
+    )
 
 
 type FinancialRecordServiceDep = Annotated[
