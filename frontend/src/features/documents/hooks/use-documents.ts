@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  type FinancialRecord,
+  listFinancialRecords,
+} from "../api/financial-records";
+import {
+  type UploadMetadataResponse,
   deleteUploadMetadata,
   listUploadMetadata,
   updateUploadMetadata,
@@ -16,19 +21,35 @@ type UseDocuments = {
   uploadError: string | null;
   pendingId: string | null;
   clearError: () => void;
+  reload: () => Promise<void>;
   uploadFiles: (files: File[]) => Promise<void>;
   renameDocument: (id: string, name: string) => Promise<boolean>;
   deleteDocument: (id: string) => Promise<boolean>;
 };
 
+// Pull uploads and their structured records together so the list can show the
+// extracted vendor and amount.
+async function loadVaultDocuments(
+  signal?: AbortSignal,
+): Promise<VaultDocument[]> {
+  const [uploads, records] = await Promise.all([
+    listUploadMetadata({ signal }),
+    listFinancialRecords({ signal }).catch(() => [] as FinancialRecord[]),
+  ]);
+
+  const recordsByUpload = new Map(
+    records.map((record) => [record.upload_id, record]),
+  );
+
+  return uploads.map((upload: UploadMetadataResponse) =>
+    mapUploadToDocument(upload, recordsByUpload.get(upload.id) ?? null),
+  );
+}
+
 // How often to re-poll the uploads list while any document is still being processed
 // Set to 2.5s
 const PROCESSING_POLL_INTERVAL_MS = 2500;
 
-/**
- * Owns the document collection and every async operation against the uploads
- * API (load, upload, rename, delete) so view components stay presentational.
- */
 export function useDocuments(): UseDocuments {
   const [documents, setDocuments] = useState<VaultDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,8 +66,7 @@ export function useDocuments(): UseDocuments {
       setError(null);
 
       try {
-        const uploads = await listUploadMetadata({ signal: controller.signal });
-        setDocuments(uploads.map(mapUploadToDocument));
+        setDocuments(await loadVaultDocuments(controller.signal));
       } catch (caught) {
         if (caught instanceof DOMException && caught.name === "AbortError") {
           return;
@@ -69,8 +89,7 @@ export function useDocuments(): UseDocuments {
   // completes.
   const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
-      const uploads = await listUploadMetadata({ signal });
-      setDocuments(uploads.map(mapUploadToDocument));
+      setDocuments(await loadVaultDocuments(signal));
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === "AbortError") {
         return;
@@ -183,6 +202,7 @@ export function useDocuments(): UseDocuments {
     uploadError,
     pendingId,
     clearError,
+    reload: refresh,
     uploadFiles,
     renameDocument,
     deleteDocument,

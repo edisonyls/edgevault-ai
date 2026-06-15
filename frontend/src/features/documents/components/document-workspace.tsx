@@ -22,6 +22,7 @@ export function DocumentWorkspace() {
     uploadError,
     pendingId,
     clearError,
+    reload,
     uploadFiles,
     renameDocument,
     deleteDocument,
@@ -228,6 +229,7 @@ export function DocumentWorkspace() {
       <DocumentTextDialog
         document={viewingDocument}
         onClose={() => setViewingId(null)}
+        onRecordSaved={() => void reload()}
       />
 
       <ConfirmDialog

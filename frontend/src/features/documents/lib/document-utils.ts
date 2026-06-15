@@ -1,4 +1,9 @@
+import type {
+  FinancialDocumentType,
+  FinancialRecord,
+} from "../api/financial-records";
 import type { UploadMetadataResponse } from "../api/uploads";
+import { formatCurrencyAmount } from "./financial-display";
 import type {
   DocumentStatus,
   DocumentType,
@@ -71,18 +76,60 @@ export function formatUploadedAt(timestamp: string) {
 
 export function mapUploadToDocument(
   upload: UploadMetadataResponse,
+  record?: FinancialRecord | null,
 ): VaultDocument {
+  const status = mapUploadStatus(upload.status);
+
   return {
     id: upload.id,
     name: upload.display_filename,
-    type: inferDocumentType(upload.display_filename),
-    vendor: "New upload",
+    type:
+      mapFinancialDocumentType(record?.document_type) ??
+      inferDocumentType(upload.display_filename),
+    vendor: record?.vendor ?? defaultVendorLabel(status),
     uploadedAt: formatUploadedAt(upload.created_at),
     size: formatFileSize(upload.file_size),
-    amount: "Pending",
-    status: mapUploadStatus(upload.status),
+    amount:
+      record && record.total_amount !== null
+        ? formatCurrencyAmount(record.total_amount, record.currency)
+        : defaultAmountLabel(status),
+    status,
+    category: record?.category ?? null,
     text: upload.text,
   };
+}
+
+function defaultVendorLabel(status: DocumentStatus): string {
+  if (status === "Processing") {
+    return "Extracting…";
+  }
+
+  return "Unknown";
+}
+
+function defaultAmountLabel(status: DocumentStatus): string {
+  if (status === "Processing") {
+    return "Pending";
+  }
+
+  return "—";
+}
+
+function mapFinancialDocumentType(
+  type: FinancialDocumentType | null | undefined,
+): DocumentType | null {
+  switch (type) {
+    case "receipt":
+      return "Receipt";
+    case "invoice":
+      return "Invoice";
+    case "bill":
+      return "Bill";
+    case "statement":
+      return "Statement";
+    default:
+      return null;
+  }
 }
 
 export function sumDetectedAmounts(documents: VaultDocument[]) {

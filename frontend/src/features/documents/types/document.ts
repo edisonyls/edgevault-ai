@@ -21,5 +21,6 @@ export type VaultDocument = {
   size: string;
   amount: string;
   status: DocumentStatus;
+  category: string | null;
   text: string | null;
 };

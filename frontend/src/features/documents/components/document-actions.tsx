@@ -22,7 +22,7 @@ export function DocumentActions({
         type="button"
         variant="outline"
         onPress={() => onView(document)}
-        aria-label={`View extracted text for ${document.name}`}
+        aria-label={`View details for ${document.name}`}
         className="grid min-h-11 place-items-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700 focus:ring-2 focus:ring-indigo-600"
       >
         View

@@ -4,15 +4,18 @@ import { useEffect, useId, useRef } from "react";
 import { Button, Chip, Surface, Typography } from "@heroui/react";
 import { statusColor } from "../lib/document-display";
 import type { VaultDocument } from "../types/document";
+import { FinancialRecordPanel } from "./financial-record-panel";
 
 type DocumentTextDialogProps = {
   document: VaultDocument | null;
   onClose: () => void;
+  onRecordSaved: () => void;
 };
 
 export function DocumentTextDialog({
   document: doc,
   onClose,
+  onRecordSaved,
 }: DocumentTextDialogProps) {
   const headingId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -81,7 +84,7 @@ export function DocumentTextDialog({
                 {doc.status}
               </Chip>
               <Typography.Paragraph size="xs" className="text-slate-500">
-                Extracted text
+                Document detail
               </Typography.Paragraph>
             </Surface>
           </Surface>
@@ -99,9 +102,28 @@ export function DocumentTextDialog({
 
         <Surface
           variant="transparent"
-          className="mt-4 min-h-0 flex-1 overflow-auto rounded-md border border-slate-200 bg-slate-50 p-4"
+          className="mt-4 min-h-0 flex-1 space-y-5 overflow-auto pr-1"
         >
-          <DocumentTextBody document={doc} />
+          <FinancialRecordPanel
+            uploadId={doc.id}
+            isProcessing={doc.status === "Processing"}
+            onSaved={onRecordSaved}
+          />
+
+          <Surface variant="transparent">
+            <Typography.Heading
+              level={3}
+              className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500"
+            >
+              Extracted text
+            </Typography.Heading>
+            <Surface
+              variant="transparent"
+              className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-4"
+            >
+              <DocumentTextBody document={doc} />
+            </Surface>
+          </Surface>
         </Surface>
       </Surface>
     </Surface>
