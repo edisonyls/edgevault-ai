@@ -2,8 +2,13 @@ from typing import Annotated
 
 import asyncpg
 from fastapi import Depends, Request
+from pgvector.asyncpg import register_vector
 
 from app.core.config import Settings
+
+
+async def _init_connection(connection: asyncpg.Connection) -> None:
+    await register_vector(connection)
 
 
 async def create_database_pool(settings: Settings) -> asyncpg.Pool:
@@ -11,6 +16,7 @@ async def create_database_pool(settings: Settings) -> asyncpg.Pool:
         dsn=settings.database_url,
         min_size=settings.database_pool_min_size,
         max_size=settings.database_pool_max_size,
+        init=_init_connection,
     )
 
 

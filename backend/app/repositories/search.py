@@ -89,29 +89,16 @@ class SearchRepository:
             )
             order_by = "rank DESC, u.created_at DESC"
 
-        if category is not None:
-            values.append(category)
-            where.append(f"f.category = ${len(values)}")
-
-        if vendor is not None:
-            values.append(f"%{vendor.strip()}%")
-            where.append(f"f.vendor ILIKE ${len(values)}")
-
-        if document_type is not None:
-            values.append(document_type)
-            where.append(f"f.document_type = ${len(values)}")
-
-        if payment_status is not None:
-            values.append(payment_status)
-            where.append(f"f.payment_status = ${len(values)}")
-
-        if date_from is not None:
-            values.append(date_from)
-            where.append(f"f.transaction_date >= ${len(values)}")
-
-        if date_to is not None:
-            values.append(date_to)
-            where.append(f"f.transaction_date <= ${len(values)}")
+        self._append_structured_filters(
+            values=values,
+            where=where,
+            category=category,
+            vendor=vendor,
+            document_type=document_type,
+            payment_status=payment_status,
+            date_from=date_from,
+            date_to=date_to,
+        )
 
         where_clause = f"WHERE {' AND '.join(where)}" if where else ""
 
@@ -136,3 +123,97 @@ class SearchRepository:
                 """,
                 *values,
             )
+
+    # Semantic search by embedding similarity
+    async def search_semantic(
+        self,
+        *,
+        embedding: list[float],
+        category: str | None,
+        vendor: str | None,
+        document_type: str | None,
+        payment_status: str | None,
+        date_from: date | None,
+        date_to: date | None,
+        limit: int,
+        offset: int,
+    ) -> list[Record]:
+        values: list[object] = [embedding]
+        where: list[str] = []
+
+        self._append_structured_filters(
+            values=values,
+            where=where,
+            category=category,
+            vendor=vendor,
+            document_type=document_type,
+            payment_status=payment_status,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
+        where_clause = f"WHERE {' AND '.join(where)}" if where else ""
+
+        values.extend([limit, offset])
+        limit_placeholder = f"${len(values) - 1}"
+        offset_placeholder = f"${len(values)}"
+
+        async with self.database_pool.acquire() as connection:
+            return await connection.fetch(
+                f"""
+                SELECT * FROM (
+                    SELECT DISTINCT ON (u.id)
+                        {_UPLOAD_COLUMNS},
+                        {_FINANCIAL_RECORD_COLUMNS},
+                        e.content AS snippet,
+                        1 - (e.embedding <=> $1) AS rank
+                    FROM resume_uploads u
+                    LEFT JOIN financial_records f ON f.upload_id = u.id
+                    JOIN document_embeddings e ON e.upload_id = u.id
+                    {where_clause}
+                    ORDER BY u.id, e.embedding <=> $1
+                ) ranked
+                ORDER BY rank DESC
+                LIMIT {limit_placeholder}
+                OFFSET {offset_placeholder}
+                """,
+                *values,
+            )
+
+    # Blend keyword and semantic rankings with Reciprocal Rank Fusion. Pulls a
+    # window of each list, fuses by document, then applies offset/limit.
+    @staticmethod
+    def _append_structured_filters(
+        *,
+        values: list[object],
+        where: list[str],
+        category: str | None,
+        vendor: str | None,
+        document_type: str | None,
+        payment_status: str | None,
+        date_from: date | None,
+        date_to: date | None,
+    ) -> None:
+        if category is not None:
+            values.append(category)
+            where.append(f"f.category = ${len(values)}")
+
+        if vendor is not None:
+            values.append(f"%{vendor.strip()}%")
+            where.append(f"f.vendor ILIKE ${len(values)}")
+
+        if document_type is not None:
+            values.append(document_type)
+            where.append(f"f.document_type = ${len(values)}")
+
+        if payment_status is not None:
+            values.append(payment_status)
+            where.append(f"f.payment_status = ${len(values)}")
+
+        if date_from is not None:
+            values.append(date_from)
+            where.append(f"f.transaction_date >= ${len(values)}")
+
+        if date_to is not None:
+            values.append(date_to)
+            where.append(f"f.transaction_date <= ${len(values)}")

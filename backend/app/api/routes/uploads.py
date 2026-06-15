@@ -14,6 +14,7 @@ from fastapi import (
 
 from app.core.config import Settings, get_settings
 from app.core.database import DatabasePoolDep
+from app.repositories.document_embeddings import DocumentEmbeddingRepository
 from app.repositories.document_extractions import DocumentExtractionRepository
 from app.repositories.financial_records import FinancialRecordRepository
 from app.repositories.uploads import UploadRepository
@@ -27,6 +28,8 @@ from app.schemas.uploads import (
     UploadStatus,
 )
 from app.services.document_extraction import DocumentExtractionService
+from app.services.embeddings import get_embedding_model
+from app.services.embeddings.service import EmbeddingService
 from app.services.financial_extraction import FinancialRecordService
 from app.services.ocr.base import OcrEngine
 from app.services.ocr.tesseract import TesseractEngine
@@ -78,6 +81,15 @@ def get_document_extraction_service(
     engine: Annotated[OcrEngine, Depends(get_ocr_engine)],
     financial_record_service: FinancialRecordServiceDep,
 ) -> DocumentExtractionService:
+    embedding_service: EmbeddingService | None = None
+    if settings.embeddings_enabled:
+        embedding_service = EmbeddingService(
+            repository=DocumentEmbeddingRepository(database_pool),
+            model=get_embedding_model(settings),
+            chunk_size=settings.embedding_chunk_size,
+            chunk_overlap=settings.embedding_chunk_overlap,
+        )
+
     return DocumentExtractionService(
         extraction_repository=DocumentExtractionRepository(database_pool),
         upload_repository=UploadRepository(database_pool),
@@ -85,6 +97,7 @@ def get_document_extraction_service(
         engine=engine,
         pdf_text_threshold=settings.ocr_pdf_text_threshold,
         pdf_render_dpi=settings.ocr_pdf_render_dpi,
+        embedding_service=embedding_service,
     )
 
 

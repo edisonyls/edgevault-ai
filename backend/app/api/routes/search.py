@@ -1,9 +1,11 @@
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 
+from app.core.config import Settings, get_settings
 from app.core.database import DatabasePoolDep
+from app.repositories.document_embeddings import DocumentEmbeddingRepository
 from app.repositories.search import SearchRepository
 from app.schemas.financial_records import (
     FinancialCategory,
@@ -11,15 +13,29 @@ from app.schemas.financial_records import (
     PaymentStatus,
 )
 from app.schemas.search import SearchResultResponse
-from app.services.search import SearchService
+from app.services.embeddings import get_embedding_model
+from app.services.embeddings.service import EmbeddingService
+from app.services.search import SearchMode, SearchService
 
 router = APIRouter(tags=["search"])
 
 MAX_SEARCH_LIMIT = 500
 
 
-def get_search_service(database_pool: DatabasePoolDep) -> SearchService:
-    return SearchService(SearchRepository(database_pool))
+def get_search_service(
+    database_pool: DatabasePoolDep,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SearchService:
+    embedding_service: EmbeddingService | None = None
+    if settings.embeddings_enabled:
+        embedding_service = EmbeddingService(
+            repository=DocumentEmbeddingRepository(database_pool),
+            model=get_embedding_model(settings),
+            chunk_size=settings.embedding_chunk_size,
+            chunk_overlap=settings.embedding_chunk_overlap,
+        )
+
+    return SearchService(SearchRepository(database_pool), embedding_service)
 
 
 type SearchServiceDep = Annotated[SearchService, Depends(get_search_service)]
@@ -37,9 +53,13 @@ async def search_documents(
     payment_status: Annotated[PaymentStatus | None, Query()] = None,
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
+    mode: Annotated[
+        Literal["keyword", "semantic", "hybrid"], Query()
+    ] = "keyword",
     limit: Annotated[int, Query(ge=1, le=MAX_SEARCH_LIMIT)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[SearchResultResponse]:
+    search_mode: SearchMode = mode
     return await search_service.search(
         q=q,
         category=category,
@@ -50,6 +70,7 @@ async def search_documents(
         date_to=date_to,
         limit=limit,
         offset=offset,
+        mode=search_mode,
     )
 
 

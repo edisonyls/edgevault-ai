@@ -11,6 +11,9 @@ DATABASE_POOL_MIN_SIZE = 1
 DATABASE_POOL_MAX_SIZE = 5
 OCR_PDF_TEXT_THRESHOLD = 20
 OCR_PDF_RENDER_DPI = 200
+EMBEDDING_DIMENSION = 384
+EMBEDDING_CHUNK_SIZE = 1500
+EMBEDDING_CHUNK_OVERLAP = 150
 
 
 class Settings(BaseSettings):
@@ -32,6 +35,12 @@ class Settings(BaseSettings):
     ocr_language: str = "eng"
     ocr_pdf_text_threshold: int = OCR_PDF_TEXT_THRESHOLD
     ocr_pdf_render_dpi: int = OCR_PDF_RENDER_DPI
+    embeddings_enabled: bool = True
+    embedding_provider: str = "fastembed"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_dimension: int = EMBEDDING_DIMENSION
+    embedding_chunk_size: int = EMBEDDING_CHUNK_SIZE
+    embedding_chunk_overlap: int = EMBEDDING_CHUNK_OVERLAP
 
     model_config = SettingsConfigDict(
         env_file=find_dotenv(usecwd=True) or None,

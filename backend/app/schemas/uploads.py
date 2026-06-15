@@ -4,7 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-UploadStatus = Literal["uploaded", "processing", "processed", "failed"]
+UploadStatus = Literal["uploaded", "processing",
+                       "indexing", "processed", "failed"]
 
 
 class UploadMetadataResponse(BaseModel):

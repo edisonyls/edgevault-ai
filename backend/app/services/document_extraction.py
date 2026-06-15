@@ -13,6 +13,7 @@ from PIL import Image
 from app.repositories.document_extractions import DocumentExtractionRepository
 from app.repositories.uploads import UploadRepository
 from app.schemas.document_extractions import DocumentExtractionResponse, ExtractionMethod
+from app.services.embeddings.service import EmbeddingService
 from app.services.financial_extraction import FinancialRecordService
 from app.services.ocr.base import OcrEngine
 
@@ -60,6 +61,7 @@ class DocumentExtractionService:
         engine: OcrEngine,
         pdf_text_threshold: int,
         pdf_render_dpi: int,
+        embedding_service: EmbeddingService | None = None,
     ) -> None:
         self.extraction_repository = extraction_repository
         self.upload_repository = upload_repository
@@ -67,6 +69,7 @@ class DocumentExtractionService:
         self.engine = engine
         self.pdf_text_threshold = pdf_text_threshold
         self.pdf_render_dpi = pdf_render_dpi
+        self.embedding_service = embedding_service
 
     async def run(self, *, upload_id: UUID, storage_path: Path, mime_type: str) -> None:
         """
@@ -88,8 +91,10 @@ class DocumentExtractionService:
                 status="succeeded",
                 error_message=None,
             )
+            # Update upload status to 'indexing' while we derive financial
+            # fields and embeddings, so the frontend can reflect that work is still ongoing.
             await self.upload_repository.update(
-                upload_id, {"text": outcome.text, "status": "processed"}
+                upload_id, {"text": outcome.text, "status": "indexing"}
             )
             # Derive structured financial fields from the OCR text.
             try:
@@ -99,6 +104,18 @@ class DocumentExtractionService:
             except Exception:
                 logger.exception(
                     "Financial extraction failed for upload %s", upload_id)
+
+            if self.embedding_service is not None:
+                try:
+                    await self.embedding_service.embed_and_store(
+                        upload_id=upload_id, text=outcome.text
+                    )
+                except Exception:
+                    logger.exception(
+                        "Embedding generation failed for upload %s", upload_id)
+
+            # Update upload status to 'processed' after all post-processing is done.
+            await self.upload_repository.update(upload_id, {"status": "processed"})
         except Exception as exc:
             latency_ms = int((time.perf_counter() - started_at) * 1000)
             error_message = str(exc) or exc.__class__.__name__
