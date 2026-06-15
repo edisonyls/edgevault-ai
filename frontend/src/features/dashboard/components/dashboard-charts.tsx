@@ -3,19 +3,21 @@
 import { useMemo } from "react";
 import {
   ArcElement,
+  BarController,
   BarElement,
   CategoryScale,
-  Chart as ChartJS,
+  Chart,
+  type ChartConfiguration,
   Filler,
   Legend,
   LinearScale,
+  LineController,
   LineElement,
+  DoughnutController,
   PointElement,
   Tooltip,
-  type ChartOptions,
   type TooltipItem,
 } from "chart.js";
-import { Bar, Doughnut, Line } from "react-chartjs-2";
 import {
   categoryLabel,
   formatCurrencyAmount,
@@ -25,15 +27,19 @@ import type {
   MonthlyTotal,
   VendorTotal,
 } from "../lib/analytics";
+import { useChart } from "./use-chart";
 
 // Register only the controllers/elements actually used, once per module load.
-ChartJS.register(
+Chart.register(
   ArcElement,
+  BarController,
   BarElement,
   CategoryScale,
+  DoughnutController,
   Filler,
   Legend,
   LinearScale,
+  LineController,
   LineElement,
   PointElement,
   Tooltip,
@@ -50,9 +56,9 @@ const PALETTE = [
   "#94a3b8",
 ];
 
-ChartJS.defaults.font.family =
+Chart.defaults.font.family =
   "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif";
-ChartJS.defaults.color = "#475569";
+Chart.defaults.color = "#475569";
 
 function money(value: number, currency: string): string {
   return formatCurrencyAmount(value, currency);
@@ -65,51 +71,50 @@ export function CategoryDoughnut({
   data: CategoryTotal[];
   currency: string;
 }) {
-  const chartData = useMemo(
+  const config = useMemo<ChartConfiguration<"doughnut">>(
     () => ({
-      labels: data.map((entry) => categoryLabel(entry.category)),
-      datasets: [
-        {
-          data: data.map((entry) => entry.total),
-          backgroundColor: data.map(
-            (_, index) => PALETTE[index % PALETTE.length],
-          ),
-          borderColor: "#ffffff",
-          borderWidth: 2,
-          hoverOffset: 6,
-        },
-      ],
-    }),
-    [data],
-  );
-
-  const options = useMemo<ChartOptions<"doughnut">>(
-    () => ({
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: "62%",
-      plugins: {
-        legend: {
-          position: "right",
-          labels: {
-            boxWidth: 12,
-            boxHeight: 12,
-            padding: 14,
-            usePointStyle: true,
+      type: "doughnut",
+      data: {
+        labels: data.map((entry) => categoryLabel(entry.category)),
+        datasets: [
+          {
+            data: data.map((entry) => entry.total),
+            backgroundColor: data.map(
+              (_, index) => PALETTE[index % PALETTE.length],
+            ),
+            borderColor: "#ffffff",
+            borderWidth: 2,
+            hoverOffset: 6,
           },
-        },
-        tooltip: {
-          callbacks: {
-            label: (item: TooltipItem<"doughnut">) =>
-              ` ${money(item.parsed, currency)}`,
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "62%",
+        plugins: {
+          legend: {
+            position: "right",
+            labels: {
+              boxWidth: 12,
+              boxHeight: 12,
+              padding: 14,
+              usePointStyle: true,
+            },
+          },
+          tooltip: {
+            callbacks: {
+              label: (item: TooltipItem<"doughnut">) =>
+                ` ${money(item.parsed, currency)}`,
+            },
           },
         },
       },
     }),
-    [currency],
+    [data, currency],
   );
 
-  return <Doughnut data={chartData} options={options} />;
+  return <canvas ref={useChart(config)} />;
 }
 
 export function VendorBar({
@@ -119,49 +124,48 @@ export function VendorBar({
   data: VendorTotal[];
   currency: string;
 }) {
-  const chartData = useMemo(
+  const config = useMemo<ChartConfiguration<"bar">>(
     () => ({
-      labels: data.map((entry) => entry.vendor),
-      datasets: [
-        {
-          data: data.map((entry) => entry.total),
-          backgroundColor: "#4f46e5",
-          borderRadius: 6,
-          maxBarThickness: 26,
-        },
-      ],
-    }),
-    [data],
-  );
-
-  const options = useMemo<ChartOptions<"bar">>(
-    () => ({
-      indexAxis: "y",
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (item: TooltipItem<"bar">) =>
-              ` ${money(item.parsed.x ?? 0, currency)}`,
+      type: "bar",
+      data: {
+        labels: data.map((entry) => entry.vendor),
+        datasets: [
+          {
+            data: data.map((entry) => entry.total),
+            backgroundColor: "#4f46e5",
+            borderRadius: 6,
+            maxBarThickness: 26,
+          },
+        ],
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (item: TooltipItem<"bar">) =>
+                ` ${money(item.parsed.x ?? 0, currency)}`,
+            },
           },
         },
-      },
-      scales: {
-        x: {
-          grid: { color: "#f1f5f9" },
-          ticks: {
-            callback: (value) => money(Number(value), currency),
+        scales: {
+          x: {
+            grid: { color: "#f1f5f9" },
+            ticks: {
+              callback: (value) => money(Number(value), currency),
+            },
           },
+          y: { grid: { display: false } },
         },
-        y: { grid: { display: false } },
       },
     }),
-    [currency],
+    [data, currency],
   );
 
-  return <Bar data={chartData} options={options} />;
+  return <canvas ref={useChart(config)} />;
 }
 
 export function MonthlyTrendLine({
@@ -171,51 +175,50 @@ export function MonthlyTrendLine({
   data: MonthlyTotal[];
   currency: string;
 }) {
-  const chartData = useMemo(
+  const config = useMemo<ChartConfiguration<"line">>(
     () => ({
-      labels: data.map((entry) => entry.label),
-      datasets: [
-        {
-          data: data.map((entry) => entry.total),
-          borderColor: "#4f46e5",
-          backgroundColor: "rgba(79, 70, 229, 0.12)",
-          fill: true,
-          tension: 0.35,
-          pointBackgroundColor: "#4f46e5",
-          pointRadius: 4,
-          pointHoverRadius: 6,
+      type: "line",
+      data: {
+        labels: data.map((entry) => entry.label),
+        datasets: [
+          {
+            data: data.map((entry) => entry.total),
+            borderColor: "#4f46e5",
+            backgroundColor: "rgba(79, 70, 229, 0.12)",
+            fill: true,
+            tension: 0.35,
+            pointBackgroundColor: "#4f46e5",
+            pointRadius: 4,
+            pointHoverRadius: 6,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (item: TooltipItem<"line">) =>
+                ` ${money(item.parsed.y ?? 0, currency)}`,
+            },
+          },
         },
-      ],
-    }),
-    [data],
-  );
-
-  const options = useMemo<ChartOptions<"line">>(
-    () => ({
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (item: TooltipItem<"line">) =>
-              ` ${money(item.parsed.y ?? 0, currency)}`,
+        scales: {
+          x: { grid: { display: false } },
+          y: {
+            beginAtZero: true,
+            grid: { color: "#f1f5f9" },
+            ticks: {
+              callback: (value) => money(Number(value), currency),
+            },
           },
         },
       },
-      scales: {
-        x: { grid: { display: false } },
-        y: {
-          beginAtZero: true,
-          grid: { color: "#f1f5f9" },
-          ticks: {
-            callback: (value) => money(Number(value), currency),
-          },
-        },
-      },
     }),
-    [currency],
+    [data, currency],
   );
 
-  return <Line data={chartData} options={options} />;
+  return <canvas ref={useChart(config)} />;
 }
