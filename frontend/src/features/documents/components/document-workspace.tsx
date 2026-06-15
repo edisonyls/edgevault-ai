@@ -38,7 +38,7 @@ export function DocumentWorkspace() {
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const chat = useDocumentChat(documents);
+  const chat = useDocumentChat();
 
   const filteredDocuments = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -219,6 +219,7 @@ export function DocumentWorkspace() {
             <DocumentChat
               messages={chat.messages}
               input={chat.input}
+              isSending={chat.isSending}
               onInputChange={chat.setInput}
               onSubmit={chat.submit}
             />
