@@ -13,6 +13,7 @@ from PIL import Image
 from app.repositories.document_extractions import DocumentExtractionRepository
 from app.repositories.uploads import UploadRepository
 from app.schemas.document_extractions import DocumentExtractionResponse, ExtractionMethod
+from app.services.financial_extraction import FinancialRecordService
 from app.services.ocr.base import OcrEngine
 
 logger = logging.getLogger(__name__)
@@ -55,18 +56,21 @@ class DocumentExtractionService:
         *,
         extraction_repository: DocumentExtractionRepository,
         upload_repository: UploadRepository,
+        financial_record_service: FinancialRecordService,
         engine: OcrEngine,
         pdf_text_threshold: int,
         pdf_render_dpi: int,
     ) -> None:
         self.extraction_repository = extraction_repository
         self.upload_repository = upload_repository
+        self.financial_record_service = financial_record_service
         self.engine = engine
         self.pdf_text_threshold = pdf_text_threshold
         self.pdf_render_dpi = pdf_render_dpi
 
     async def run(self, *, upload_id: UUID, storage_path: Path, mime_type: str) -> None:
-        """Background entry point: OCR the document and persist the result.
+        """
+        Background entry point: OCR the document and persist the result.
         """
         started_at = time.perf_counter()
         try:
@@ -87,6 +91,14 @@ class DocumentExtractionService:
             await self.upload_repository.update(
                 upload_id, {"text": outcome.text, "status": "processed"}
             )
+            # Derive structured financial fields from the OCR text.
+            try:
+                await self.financial_record_service.extract_and_store(
+                    upload_id=upload_id, text=outcome.text
+                )
+            except Exception:
+                logger.exception(
+                    "Financial extraction failed for upload %s", upload_id)
         except Exception as exc:
             latency_ms = int((time.perf_counter() - started_at) * 1000)
             error_message = str(exc) or exc.__class__.__name__

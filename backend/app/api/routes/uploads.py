@@ -15,8 +15,10 @@ from fastapi import (
 from app.core.config import Settings, get_settings
 from app.core.database import DatabasePoolDep
 from app.repositories.document_extractions import DocumentExtractionRepository
+from app.repositories.financial_records import FinancialRecordRepository
 from app.repositories.uploads import UploadRepository
 from app.schemas.document_extractions import DocumentExtractionResponse
+from app.schemas.financial_records import FinancialRecordResponse
 from app.schemas.uploads import (
     UploadDeleteResponse,
     UploadMetadataResponse,
@@ -24,6 +26,7 @@ from app.schemas.uploads import (
     UploadStatus,
 )
 from app.services.document_extraction import DocumentExtractionService
+from app.services.financial_extraction import FinancialRecordService
 from app.services.ocr.base import OcrEngine
 from app.services.ocr.tesseract import TesseractEngine
 from app.services.uploads import (
@@ -55,15 +58,26 @@ def get_ocr_engine(settings: SettingsDep) -> OcrEngine:
     return TesseractEngine(language=settings.ocr_language)
 
 
+def get_financial_record_service(database_pool: DatabasePoolDep) -> FinancialRecordService:
+    return FinancialRecordService(FinancialRecordRepository(database_pool))
+
+
+type FinancialRecordServiceDep = Annotated[
+    FinancialRecordService, Depends(get_financial_record_service)
+]
+
+
 # Get the document extraction service.
 def get_document_extraction_service(
     database_pool: DatabasePoolDep,
     settings: SettingsDep,
     engine: Annotated[OcrEngine, Depends(get_ocr_engine)],
+    financial_record_service: FinancialRecordServiceDep,
 ) -> DocumentExtractionService:
     return DocumentExtractionService(
         extraction_repository=DocumentExtractionRepository(database_pool),
         upload_repository=UploadRepository(database_pool),
+        financial_record_service=financial_record_service,
         engine=engine,
         pdf_text_threshold=settings.ocr_pdf_text_threshold,
         pdf_render_dpi=settings.ocr_pdf_render_dpi,
@@ -184,6 +198,32 @@ async def list_document_extractions(
         raise_upload_http_exception(exc)
 
     return await extraction_service.list_extractions(upload_id)
+
+
+@router.get(
+    "/{upload_id}/financial-record",
+    response_model=FinancialRecordResponse,
+)
+async def get_financial_record(
+    upload_service: UploadServiceDep,
+    financial_record_service: FinancialRecordServiceDep,
+    upload_id: UUID,
+) -> FinancialRecordResponse:
+    try:
+        # Ensure the upload exists before attempting to fetch the financial record.
+        await upload_service.get_upload_metadata(upload_id)
+    except UploadServiceError as exc:
+        raise_upload_http_exception(exc)
+
+    record = await financial_record_service.get_for_upload(upload_id)
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No financial record found for this document.",
+        )
+
+    return record
 
 
 @router.patch("/{upload_id}", response_model=UploadMetadataResponse)
