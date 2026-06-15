@@ -20,6 +20,12 @@ env:
   BACKEND_NODE_ENV: ${{ secrets.BACKEND_NODE_ENV }}
   BACKEND_DATABASE_URL: ${{ secrets.BACKEND_DATABASE_URL }}
   BACKEND_UPLOAD_STORAGE_DIR: ${{ secrets.BACKEND_UPLOAD_STORAGE_DIR }}
+  ASSISTANT_LLM_ENABLED: ${{ vars.ASSISTANT_LLM_ENABLED }}
+  ASSISTANT_LLM_BASE_URL: ${{ secrets.ASSISTANT_LLM_BASE_URL}}
+  ASSISTANT_LLM_MODEL: ${{ vars.ASSISTANT_LLM_MODEL }}
+  ASSISTANT_FALLBACK_ENABLED: ${{ vars.ASSISTANT_FALLBACK_ENABLED }}
+  ASSISTANT_FALLBACK_MODEL: ${{ vars.ASSISTANT_FALLBACK_MODEL }}
+  DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
 
 jobs:
   deploy:
@@ -50,13 +56,22 @@ jobs:
             --exclude='.ruff_cache' \
             ./ "$BACKEND_DEPLOY_PATH/"
 
-          # Create .env file in deployment directory
+          # Create .env file in deployment directory. Written from secrets/vars
+          # at deploy time and never committed; locked to the runner user.
           echo "Creating .env file in deployment directory..."
-          printf 'NODE_ENV=%s\nDATABASE_URL=%s\nUPLOAD_STORAGE_DIR=%s\n' \
+          ENV_FILE="$BACKEND_DEPLOY_PATH/backend/.env"
+          install -m 600 /dev/null "$ENV_FILE"
+          printf 'NODE_ENV=%s\nDATABASE_URL=%s\nUPLOAD_STORAGE_DIR=%s\nASSISTANT_LLM_ENABLED=%s\nASSISTANT_LLM_BASE_URL=%s\nASSISTANT_LLM_MODEL=%s\nASSISTANT_FALLBACK_ENABLED=%s\nASSISTANT_FALLBACK_MODEL=%s\nDEEPSEEK_API_KEY=%s\n' \
             "$BACKEND_NODE_ENV" \
             "$BACKEND_DATABASE_URL" \
             "$BACKEND_UPLOAD_STORAGE_DIR" \
-            > "$BACKEND_DEPLOY_PATH/backend/.env"
+            "$ASSISTANT_LLM_ENABLED" \
+            "$ASSISTANT_LLM_BASE_URL" \
+            "$ASSISTANT_LLM_MODEL" \
+            "$ASSISTANT_FALLBACK_ENABLED" \
+            "$ASSISTANT_FALLBACK_MODEL" \
+            "$DEEPSEEK_API_KEY" \
+            > "$ENV_FILE"
 
           # Create virtual environment and install dependencies
           echo "Installing dependencies..."

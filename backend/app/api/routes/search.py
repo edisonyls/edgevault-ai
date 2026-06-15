@@ -53,9 +53,8 @@ async def search_documents(
     payment_status: Annotated[PaymentStatus | None, Query()] = None,
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
-    mode: Annotated[
-        Literal["keyword", "semantic", "hybrid"], Query()
-    ] = "keyword",
+    mode: Annotated[Literal["keyword", "semantic",
+                            "hybrid"], Query()] = "keyword",
     limit: Annotated[int, Query(ge=1, le=MAX_SEARCH_LIMIT)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[SearchResultResponse]:

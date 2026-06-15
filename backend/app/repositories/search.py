@@ -38,10 +38,7 @@ _FINANCIAL_RECORD_COLUMNS = """
 
 # ts_headline wraps matches in these tags; the frontend splits on them to render
 # highlights safely without trusting raw HTML.
-_HEADLINE_OPTIONS = (
-    "MaxFragments=2, MinWords=3, MaxWords=12, "
-    "StartSel=<mark>, StopSel=</mark>"
-)
+_HEADLINE_OPTIONS = "MaxFragments=2, MinWords=3, MaxWords=12, StartSel=<mark>, StopSel=</mark>"
 
 
 class SearchRepository:

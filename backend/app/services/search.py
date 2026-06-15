@@ -97,9 +97,7 @@ class SearchService:
 
         embedding = await self.embedding_service.embed_query(q or "")
         if embedding is None:
-            return await self._keyword(
-                q=q, limit=limit, offset=offset, **filters
-            )
+            return await self._keyword(q=q, limit=limit, offset=offset, **filters)
 
         # Pure semantic search
         if mode == "semantic":
@@ -156,9 +154,7 @@ class SearchService:
     ) -> list[SearchResultResponse]:
         window = limit + offset
 
-        keyword_rows = await self.repository.search(
-            q=q, limit=window, offset=0, **filters
-        )
+        keyword_rows = await self.repository.search(q=q, limit=window, offset=0, **filters)
         semantic_rows = await self.repository.search_semantic(
             embedding=embedding, limit=window, offset=0, **filters
         )

@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -7,8 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.database import close_database_pool, create_database_pool
+from app.services.assistant.clients import build_local_client
+from app.services.assistant.warmup import keep_model_warm
 
-# Gives the app one shared DB pool and guarantees it's cleaned up.
+# Gives the app one shared DB pool and guarantees both are cleaned up on shutdown.
 
 
 @asynccontextmanager
@@ -16,9 +20,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     app.state.database_pool = await create_database_pool(settings)
 
+    warm_task: asyncio.Task[None] | None = None
+    local_client = build_local_client(settings)
+    if local_client is not None and settings.assistant_llm_keep_warm:
+        warm_task = asyncio.create_task(
+            keep_model_warm(
+                local_client, settings.assistant_llm_keep_warm_interval)
+        )
+
     try:
         yield
     finally:
+        if warm_task is not None:
+            warm_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await warm_task
         await close_database_pool(app.state.database_pool)
 
 

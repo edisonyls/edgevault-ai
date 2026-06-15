@@ -10,6 +10,7 @@ from app.schemas.assistant import (
     SupportingRecord,
 )
 from app.services.assistant.intent import ALL_TIME, Intent, parse_intent
+from app.services.assistant.llm_intent import LLMIntentParser
 
 # How many evidence records to attach to an answer.
 EVIDENCE_LIMIT = 10
@@ -92,19 +93,28 @@ def _to_supporting(rows: Sequence[Record]) -> list[SupportingRecord]:
 
 
 class AssistantService:
-    def __init__(self, repository: AssistantRepository) -> None:
+    def __init__(
+        self,
+        repository: AssistantRepository,
+        *,
+        local_parser: LLMIntentParser | None = None,
+        fallback_parser: LLMIntentParser | None = None,
+    ) -> None:
         self.repository = repository
+        self.local_parser = local_parser
+        self.fallback_parser = fallback_parser
 
     async def answer(self, question: str, *, today: date | None = None) -> AssistantQueryResponse:
         if today is None:
             today = await self.repository.current_date()
-        intent = parse_intent(question, today)
+        intent, source = await self._resolve_intent(question, today)
         answer_text, supporting = await self._dispatch(intent)
 
         await self.repository.log_query(
             question=question,
             answer=answer_text,
             query_type=intent.query_type,
+            source=source,
         )
 
         return AssistantQueryResponse(
@@ -112,6 +122,28 @@ class AssistantService:
             query_type=intent.query_type,
             supporting_records=supporting,
         )
+
+    async def _resolve_intent(self, question: str, today: date) -> tuple[Intent, str]:
+        """
+        Rules first (instant); only escalate to the LLM tiers when a tier can't
+        place the question. The first tier to return a usable intent wins.
+        """
+        intent = parse_intent(question, today)
+        if intent.query_type != "unknown":
+            return intent, "rules"
+
+        tiers = (
+            (self.local_parser, "local_llm"),
+            (self.fallback_parser, "fallback_llm"),
+        )
+        for parser, source in tiers:
+            if parser is None:
+                continue
+            resolved = await parser.parse(question, today)
+            if resolved is not None and resolved.query_type != "unknown":
+                return resolved, source
+
+        return intent, "rules"
 
     async def _dispatch(self, intent: Intent) -> tuple[str, list[SupportingRecord]]:
         handlers = {

@@ -40,17 +40,20 @@ class AssistantRepository:
         async with self.database_pool.acquire() as connection:
             return await connection.fetchval("SELECT CURRENT_DATE")
 
-    async def log_query(self, *, question: str, answer: str, query_type: str) -> Record | None:
+    async def log_query(
+        self, *, question: str, answer: str, query_type: str, source: str = "rules"
+    ) -> Record | None:
         async with self.database_pool.acquire() as connection:
             return await connection.fetchrow(
                 """
-                INSERT INTO assistant_queries (question, answer, query_type)
-                VALUES ($1, $2, $3)
-                RETURNING id, question, answer, query_type, created_at
+                INSERT INTO assistant_queries (question, answer, query_type, source)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, question, answer, query_type, source, created_at
                 """,
                 question,
                 answer,
                 query_type,
+                source,
             )
 
     # Highest-spending category within an optional date window.

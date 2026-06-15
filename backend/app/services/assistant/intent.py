@@ -160,6 +160,32 @@ def _wants_top(lowered: str) -> bool:
     )
 
 
+def build_intent(
+    query_type: AssistantQueryType,
+    category: str | None,
+    question: str,
+    today: date | None = None,
+) -> Intent:
+    """
+    Assemble an Intent from a query type + category, attaching the time window 
+    with the same deterministic period parser the rules use. Category is only 
+    meaningful for category_total; it's dropped otherwise so downstream handlers 
+    behave identically to the rules path.
+    """
+    today = today or date.today()
+    lowered = question.lower()
+    date_from, date_to, period_label = _parse_period(
+        lowered, today, prefer_future=query_type == "unpaid_bills"
+    )
+    return Intent(
+        query_type=query_type,
+        category=category if query_type == "category_total" else None,
+        date_from=date_from,
+        date_to=date_to,
+        period_label=period_label,
+    )
+
+
 def parse_intent(question: str, today: date | None = None) -> Intent:
     """Map a question to a structured intent. Order encodes precedence."""
     today = today or date.today()

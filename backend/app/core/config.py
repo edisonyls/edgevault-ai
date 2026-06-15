@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import find_dotenv
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "development", "staging", "production"]
@@ -41,6 +41,26 @@ class Settings(BaseSettings):
     embedding_dimension: int = EMBEDDING_DIMENSION
     embedding_chunk_size: int = EMBEDDING_CHUNK_SIZE
     embedding_chunk_overlap: int = EMBEDDING_CHUNK_OVERLAP
+    assistant_llm_enabled: bool = False
+    assistant_llm_base_url: str = "http://localhost:8000/v1"
+    assistant_llm_model: str = "qwen2.5-instruct:1.5b"
+    assistant_llm_timeout: float = 30.0
+    assistant_llm_keep_warm: bool = True
+    assistant_llm_keep_warm_interval: float = 240.0
+    assistant_fallback_enabled: bool = False
+    assistant_fallback_base_url: str = "https://api.deepseek.com"
+    assistant_fallback_model: str = "DeepSeek-V4-Flash"
+    assistant_fallback_api_key: str | None = Field(
+        default=None, validation_alias="DEEPSEEK_API_KEY"
+    )
+    assistant_fallback_timeout: float = 30.0
+
+    @field_validator("assistant_llm_enabled", "assistant_fallback_enabled", mode="before")
+    @classmethod
+    def _blank_is_disabled(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip() == "":
+            return False
+        return value
 
     model_config = SettingsConfigDict(
         env_file=find_dotenv(usecwd=True) or None,

@@ -8,7 +8,7 @@ from app.services.embeddings.base import EmbeddingModel
 
 class EmbeddingService:
     """
-    Generates and persists document embeddings. Chunks text, embeds each chunk 
+    Generates and persists document embeddings. Chunks text, embeds each chunk
     with the configured model, and stores them.
     """
 
