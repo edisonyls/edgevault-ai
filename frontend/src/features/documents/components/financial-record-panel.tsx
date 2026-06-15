@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { Button, Chip, Input, Surface, Typography } from "@heroui/react";
 import { Detail } from "@/components/ui/detail";
-import type { FinancialRecord } from "../api/financial-records";
+import type { FinancialRecord } from "../types/financial-record";
 import {
   CATEGORY_OPTIONS,
   DOCUMENT_TYPE_OPTIONS,

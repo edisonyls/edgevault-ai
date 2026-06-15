@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
+import type {
+  FinancialCategory,
+  FinancialDocumentType,
+  FinancialRecord,
+  FinancialRecordUpdate,
+  PaymentStatus,
+} from "../types/financial-record";
 import {
-  type FinancialCategory,
-  type FinancialDocumentType,
-  type FinancialRecord,
-  type FinancialRecordUpdate,
-  type PaymentStatus,
   getFinancialRecord,
   updateFinancialRecord,
 } from "../api/financial-records";

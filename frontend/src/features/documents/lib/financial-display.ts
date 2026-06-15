@@ -2,7 +2,7 @@ import type {
   FinancialCategory,
   FinancialDocumentType,
   PaymentStatus,
-} from "../api/financial-records";
+} from "../types/financial-record";
 
 export const DOCUMENT_TYPE_OPTIONS: {
   value: FinancialDocumentType;

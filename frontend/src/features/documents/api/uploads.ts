@@ -1,31 +1,11 @@
-const DEFAULT_API_BASE_URL = "http://localhost:8000/api";
+import type {
+  UploadMetadataResponse,
+  UploadMetadataUpdate,
+} from "../types/upload";
 
-const configuredApiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.trim().replace(/\/$/, "") ?? "";
-const apiBaseUrl =
-  configuredApiBaseUrl.length > 0 ? configuredApiBaseUrl : DEFAULT_API_BASE_URL;
-
-export type UploadStatus = "uploaded" | "processing" | "processed" | "failed";
-
-export type UploadMetadataResponse = {
-  id: string;
-  text: string | null;
-  original_filename: string;
-  display_filename: string;
-  stored_filename: string;
-  file_path: string | null;
-  mime_type: string;
-  file_size: number;
-  status: UploadStatus;
-  created_at: string;
-  updated_at: string;
-};
-
-export type UploadMetadataUpdate = {
-  display_filename?: string;
-  status?: UploadStatus;
-  text?: string | null;
-};
+const apiBaseUrl = process.env
+  .NEXT_PUBLIC_API_BASE_URL!.trim()
+  .replace(/\/$/, "");
 
 export async function listUploadMetadata(
   options: { signal?: AbortSignal } = {},

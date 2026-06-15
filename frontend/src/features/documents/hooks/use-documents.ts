@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { listFinancialRecords } from "../api/financial-records";
 import {
-  type FinancialRecord,
-  listFinancialRecords,
-} from "../api/financial-records";
-import {
-  type UploadMetadataResponse,
   deleteUploadMetadata,
   listUploadMetadata,
   updateUploadMetadata,
@@ -12,6 +8,8 @@ import {
 } from "../api/uploads";
 import { mapUploadToDocument } from "../lib/document-utils";
 import type { VaultDocument } from "../types/document";
+import type { FinancialRecord } from "../types/financial-record";
+import type { UploadMetadataResponse } from "../types/upload";
 
 type UseDocuments = {
   documents: VaultDocument[];

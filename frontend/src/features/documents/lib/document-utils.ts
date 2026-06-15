@@ -1,8 +1,8 @@
 import type {
   FinancialDocumentType,
   FinancialRecord,
-} from "../api/financial-records";
-import type { UploadMetadataResponse } from "../api/uploads";
+} from "../types/financial-record";
+import type { UploadMetadataResponse } from "../types/upload";
 import { formatCurrencyAmount } from "./financial-display";
 import type {
   DocumentStatus,
