@@ -1,0 +1,23 @@
+INSERT INTO vendor_rules (keyword, vendor, category) VALUES
+    ('woolworths', 'Woolworths', 'groceries'),
+    ('coles', 'Coles', 'groceries'),
+    ('aldi', 'ALDI', 'groceries'),
+    ('iga', 'IGA', 'groceries'),
+    ('agl', 'AGL', 'utilities'),
+    ('origin energy', 'Origin Energy', 'utilities'),
+    ('energyaustralia', 'EnergyAustralia', 'utilities'),
+    ('energy australia', 'EnergyAustralia', 'utilities'),
+    ('telstra', 'Telstra', 'internet_phone'),
+    ('optus', 'Optus', 'internet_phone'),
+    ('tpg', 'TPG', 'internet_phone'),
+    ('aussie broadband', 'Aussie Broadband', 'internet_phone'),
+    ('vodafone', 'Vodafone', 'internet_phone'),
+    ('myki', 'Myki', 'transport'),
+    ('uber', 'Uber', 'transport'),
+    ('didi', 'DiDi', 'transport'),
+    ('netflix', 'Netflix', 'subscription'),
+    ('spotify', 'Spotify', 'subscription'),
+    ('chatgpt', 'ChatGPT', 'subscription'),
+    ('openai', 'OpenAI', 'subscription'),
+    ('apple', 'Apple', 'subscription')
+ON CONFLICT (keyword) DO NOTHING;

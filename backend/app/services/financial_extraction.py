@@ -24,33 +24,9 @@ RULES_VERSION = "rules_v1"
 DEFAULT_CURRENCY = "AUD"
 MAX_VENDOR_GUESS_LENGTH = 60
 
-# keyword (matched case-insensitively, word-boundary) -> canonical vendor, category.
+# All vendor rules now live in the vendor_rules table so the engine matches
+# against the rules passed in from the database rather than a hardcoded list.
 VendorRule = tuple[str, str, FinancialCategory]
-
-# Ordered so the earliest occurrence in the text wins when several vendors appear.
-VENDOR_RULES: list[VendorRule] = [
-    ("woolworths", "Woolworths", "groceries"),
-    ("coles", "Coles", "groceries"),
-    ("aldi", "ALDI", "groceries"),
-    ("iga", "IGA", "groceries"),
-    ("agl", "AGL", "utilities"),
-    ("origin energy", "Origin Energy", "utilities"),
-    ("energyaustralia", "EnergyAustralia", "utilities"),
-    ("energy australia", "EnergyAustralia", "utilities"),
-    ("telstra", "Telstra", "internet_phone"),
-    ("optus", "Optus", "internet_phone"),
-    ("tpg", "TPG", "internet_phone"),
-    ("aussie broadband", "Aussie Broadband", "internet_phone"),
-    ("vodafone", "Vodafone", "internet_phone"),
-    ("myki", "Myki", "transport"),
-    ("uber", "Uber", "transport"),
-    ("didi", "DiDi", "transport"),
-    ("netflix", "Netflix", "subscription"),
-    ("spotify", "Spotify", "subscription"),
-    ("chatgpt", "ChatGPT", "subscription"),
-    ("openai", "OpenAI", "subscription"),
-    ("apple", "Apple", "subscription"),
-]
 
 # Higher weight wins; "subtotal" lines are ignored entirely.
 TOTAL_KEYWORDS: list[tuple[str, int]] = [
@@ -168,20 +144,16 @@ def _match_rules(
     return (best[1], best[2]) if best is not None else None
 
 
-# Detect the vendor and category based on known keywords, then heuristics if
-# no known vendor is found.
+# Detect the vendor and category by matching the document against the known
+# vendor rules, then fall back to a header heuristic when none match.
 def _detect_vendor(
     text: str,
-    learned_rules: Sequence[VendorRule] = (),
+    rules: Sequence[VendorRule] = (),
 ) -> tuple[str | None, FinancialCategory | None]:
     lowered = text.lower()
-    learned = _match_rules(lowered, learned_rules)
-    if learned is not None:
-        return learned
-
-    builtin = _match_rules(lowered, VENDOR_RULES)
-    if builtin is not None:
-        return builtin
+    matched = _match_rules(lowered, rules)
+    if matched is not None:
+        return matched
 
     return _guess_vendor_from_header(text), None
 
@@ -335,10 +307,10 @@ def _score_confidence(result: ExtractedFinancials, vendor_is_known: bool) -> flo
 # then persist them.
 def extract_financials(
     text: str,
-    learned_rules: Sequence[VendorRule] = (),
+    rules: Sequence[VendorRule] = (),
 ) -> ExtractedFinancials:
     lines = text.splitlines()
-    vendor, category = _detect_vendor(text, learned_rules)
+    vendor, category = _detect_vendor(text, rules)
     vendor_is_known = category is not None
     document_type = _detect_document_type(text)
     transaction_date, due_date = _detect_dates(lines)
@@ -388,7 +360,7 @@ class FinancialRecordService:
         self.repository = repository
         self.vendor_rule_repository = vendor_rule_repository
 
-    async def _load_learned_rules(self) -> list[VendorRule]:
+    async def _load_vendor_rules(self) -> list[VendorRule]:
         rows = await self.vendor_rule_repository.list_all()
         return [(row["keyword"], row["vendor"], row["category"]) for row in rows]
 
@@ -400,8 +372,8 @@ class FinancialRecordService:
         if not text or not text.strip():
             return
 
-        learned_rules = await self._load_learned_rules()
-        extracted = extract_financials(text, learned_rules)
+        rules = await self._load_vendor_rules()
+        extracted = extract_financials(text, rules)
         await self.repository.upsert_from_extraction(
             upload_id=upload_id,
             document_type=extracted.document_type,
