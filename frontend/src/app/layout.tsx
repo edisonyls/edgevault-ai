@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { AuthGate } from "@/features/auth/components/auth-gate";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,7 +21,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <AuthGate>{children}</AuthGate>
+      </body>
     </html>
   );
 }

@@ -2,10 +2,7 @@ import type {
   FinancialRecord,
   FinancialRecordUpdate,
 } from "../types/financial-record";
-
-const apiBaseUrl = process.env
-  .NEXT_PUBLIC_API_BASE_URL!.trim()
-  .replace(/\/$/, "");
+import { apiFetch, getApiErrorMessage } from "@/lib/api";
 
 export async function listFinancialRecords(
   options: { signal?: AbortSignal; limit?: number } = {},
@@ -16,17 +13,15 @@ export async function listFinancialRecords(
   }
 
   const queryString = query.toString();
-  const url = `${apiBaseUrl}/financial-records${
-    queryString ? `?${queryString}` : ""
-  }`;
+  const url = `/financial-records${queryString ? `?${queryString}` : ""}`;
 
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method: "GET",
     signal: options.signal,
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, "Load failed"));
+    throw new Error(await getApiErrorMessage(response, "Load failed"));
   }
 
   return response.json() as Promise<FinancialRecord[]>;
@@ -40,20 +35,17 @@ export async function getFinancialRecord(
   uploadId: string,
   options: { signal?: AbortSignal } = {},
 ): Promise<FinancialRecord | null> {
-  const response = await fetch(
-    `${apiBaseUrl}/uploads/${uploadId}/financial-record`,
-    {
-      method: "GET",
-      signal: options.signal,
-    },
-  );
+  const response = await apiFetch(`/uploads/${uploadId}/financial-record`, {
+    method: "GET",
+    signal: options.signal,
+  });
 
   if (response.status === 404) {
     return null;
   }
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, "Load failed"));
+    throw new Error(await getApiErrorMessage(response, "Load failed"));
   }
 
   return response.json() as Promise<FinancialRecord>;
@@ -63,7 +55,7 @@ export async function updateFinancialRecord(
   id: string,
   update: FinancialRecordUpdate,
 ): Promise<FinancialRecord> {
-  const response = await fetch(`${apiBaseUrl}/financial-records/${id}`, {
+  const response = await apiFetch(`/financial-records/${id}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -72,22 +64,8 @@ export async function updateFinancialRecord(
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, "Update failed"));
+    throw new Error(await getApiErrorMessage(response, "Update failed"));
   }
 
   return response.json() as Promise<FinancialRecord>;
-}
-
-async function getErrorMessage(response: Response, fallback: string) {
-  try {
-    const payload = (await response.json()) as { detail?: unknown };
-
-    if (typeof payload.detail === "string") {
-      return payload.detail;
-    }
-  } catch {
-    // Fall through to the generic status message.
-  }
-
-  return `${fallback} with status ${response.status}.`;
 }

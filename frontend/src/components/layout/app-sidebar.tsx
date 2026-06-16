@@ -1,9 +1,11 @@
 "use client";
 
 import { Button, Link, Separator, Surface, Typography } from "@heroui/react";
+import { LogOut } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { workspaceNavigation } from "@/config/navigation";
 import { Metric } from "@/components/ui/summary-tile";
+import { useAuth } from "@/features/auth/components/auth-gate";
 
 type AppSidebarProps = {
   documentCount: number;
@@ -23,6 +25,7 @@ export function AppSidebar({
   uploadError,
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const { session, signOut } = useAuth();
 
   return (
     <Surface
@@ -45,20 +48,35 @@ export function AppSidebar({
               EdgeVault AI
             </Typography.Paragraph>
             <Typography.Paragraph className="text-sm text-slate-500">
-              Document workspace
+              {session.workspace?.display_name ?? "Workspace"}
             </Typography.Paragraph>
           </Surface>
         </Surface>
 
-        <Button
-          type="button"
-          variant="primary"
-          className="min-h-11 rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 lg:mt-8 lg:w-full"
-          onPress={onPickFiles}
-          isDisabled={isUploading}
+        <Surface
+          variant="transparent"
+          className="flex items-center gap-2 lg:mt-8 lg:block"
         >
-          {isUploading ? "Uploading…" : "Upload"}
-        </Button>
+          <Button
+            type="button"
+            variant="primary"
+            className="min-h-11 rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 lg:w-full"
+            onPress={onPickFiles}
+            isDisabled={isUploading}
+          >
+            {isUploading ? "Uploading..." : "Upload"}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            aria-label="Sign out"
+            className="min-h-11 rounded-md border border-slate-200 bg-white px-3 text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 lg:mt-2 lg:w-full"
+            onPress={() => void signOut()}
+          >
+            <LogOut aria-hidden="true" className="size-4" />
+            <span className="hidden lg:inline">Sign out</span>
+          </Button>
+        </Surface>
         {uploadError && (
           <Typography.Paragraph
             role="alert"

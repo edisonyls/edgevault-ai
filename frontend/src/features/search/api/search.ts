@@ -1,8 +1,5 @@
 import type { SearchFilters, SearchResult } from "../types/search";
-
-const apiBaseUrl = process.env
-  .NEXT_PUBLIC_API_BASE_URL!.trim()
-  .replace(/\/$/, "");
+import { apiFetch, getApiErrorMessage } from "@/lib/api";
 
 export async function searchDocuments(
   filters: SearchFilters,
@@ -35,30 +32,16 @@ export async function searchDocuments(
   }
 
   const queryString = query.toString();
-  const url = `${apiBaseUrl}/search${queryString ? `?${queryString}` : ""}`;
+  const url = `/search${queryString ? `?${queryString}` : ""}`;
 
-  const response = await fetch(url, {
+  const response = await apiFetch(url, {
     method: "GET",
     signal: options.signal,
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, "Search failed"));
+    throw new Error(await getApiErrorMessage(response, "Search failed"));
   }
 
   return response.json() as Promise<SearchResult[]>;
-}
-
-async function getErrorMessage(response: Response, fallback: string) {
-  try {
-    const payload = (await response.json()) as { detail?: unknown };
-
-    if (typeof payload.detail === "string") {
-      return payload.detail;
-    }
-  } catch {
-    // Fall through to the generic status message.
-  }
-
-  return `${fallback} with status ${response.status}.`;
 }
