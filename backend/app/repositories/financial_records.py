@@ -8,6 +8,7 @@ FINANCIAL_RECORD_RETURNING_COLUMNS = """
     id,
     upload_id,
     document_type,
+    document_type_source,
     vendor,
     transaction_date,
     due_date,
@@ -25,6 +26,7 @@ FINANCIAL_RECORD_SELECT_COLUMNS = """
     f.id,
     f.upload_id,
     f.document_type,
+    f.document_type_source,
     f.vendor,
     f.transaction_date,
     f.due_date,
@@ -52,6 +54,7 @@ class FinancialRecordRepository:
         *,
         upload_id: UUID,
         document_type: str | None,
+        document_type_source: str | None,
         vendor: str | None,
         transaction_date: date | None,
         due_date: date | None,
@@ -68,6 +71,7 @@ class FinancialRecordRepository:
                 INSERT INTO financial_records (
                     upload_id,
                     document_type,
+                    document_type_source,
                     vendor,
                     transaction_date,
                     due_date,
@@ -78,15 +82,16 @@ class FinancialRecordRepository:
                     extraction_method,
                     confidence
                 )
-                SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+                SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
                 WHERE EXISTS (
                     SELECT 1
                     FROM resume_uploads
                     WHERE id = $1
-                      AND workspace_id = $12
+                      AND workspace_id = $13
                 )
                 ON CONFLICT (upload_id) DO UPDATE SET
                     document_type = EXCLUDED.document_type,
+                    document_type_source = EXCLUDED.document_type_source,
                     vendor = EXCLUDED.vendor,
                     transaction_date = EXCLUDED.transaction_date,
                     due_date = EXCLUDED.due_date,
@@ -101,13 +106,14 @@ class FinancialRecordRepository:
                     SELECT 1
                     FROM resume_uploads
                     WHERE id = financial_records.upload_id
-                      AND workspace_id = $12
+                      AND workspace_id = $13
                   )
                 RETURNING
                     {FINANCIAL_RECORD_RETURNING_COLUMNS}
                 """,
                 upload_id,
                 document_type,
+                document_type_source,
                 vendor,
                 transaction_date,
                 due_date,
@@ -214,6 +220,7 @@ class FinancialRecordRepository:
                     f.id,
                     f.upload_id,
                     f.document_type,
+                    f.document_type_source,
                     f.vendor,
                     f.transaction_date,
                     f.due_date,

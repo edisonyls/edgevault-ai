@@ -8,10 +8,12 @@ from uuid import UUID
 
 from asyncpg import Record
 
+from app.repositories.document_type_rules import DocumentTypeRuleRepository
 from app.repositories.extraction_corrections import ExtractionCorrectionRepository
 from app.repositories.financial_records import FinancialRecordRepository
 from app.repositories.vendor_rules import VendorRuleRepository
 from app.schemas.financial_records import (
+    DocumentTypeSource,
     FinancialCategory,
     FinancialDocumentType,
     FinancialRecordResponse,
@@ -40,6 +42,8 @@ SNAPSHOT_FIELDS = (
 # All vendor rules now live in the vendor_rules table so the engine matches
 # against the rules passed in from the database rather than a hardcoded list.
 VendorRule = tuple[str, str, FinancialCategory]
+
+DocumentTypeRule = tuple[str, FinancialDocumentType]
 
 # Higher weight wins; "subtotal" lines are ignored entirely.
 TOTAL_KEYWORDS: list[tuple[str, int]] = [
@@ -92,6 +96,7 @@ MONTHS = {
 @dataclass(slots=True)
 class ExtractedFinancials:
     document_type: FinancialDocumentType | None
+    document_type_source: DocumentTypeSource
     vendor: str | None
     transaction_date: date | None
     due_date: date | None
@@ -163,6 +168,39 @@ def _match_rules(
             best = (match.start(), vendor, category)
 
     return (best[1], best[2]) if best is not None else None
+
+
+# Find the learned document type for a document, matching the same way vendor
+# rules do: the earliest keyword to appear in the text wins.
+def _match_document_type_rule(
+    lowered: str,
+    rules: Sequence[DocumentTypeRule],
+) -> FinancialDocumentType | None:
+    best: tuple[int, FinancialDocumentType] | None = None
+
+    for keyword, document_type in rules:
+        match = re.search(rf"\b{re.escape(keyword)}\b", lowered)
+        if match and (best is None or match.start() < best[0]):
+            best = (match.start(), document_type)
+
+    return best[1] if best is not None else None
+
+
+# Decide the document type and record how it was decided. Explicit wording in
+# the document wins. Otherwise, a learned vendor rule fills the gap
+def _resolve_document_type(
+    text: str,
+    document_type_rules: Sequence[DocumentTypeRule],
+) -> tuple[FinancialDocumentType, DocumentTypeSource]:
+    explicit = _detect_document_type(text)
+    if explicit is not None:
+        return explicit, "document"
+
+    learned = _match_document_type_rule(text.lower(), document_type_rules)
+    if learned is not None:
+        return learned, "learned"
+
+    return "receipt", "default"
 
 
 # Detect the vendor and category by matching the document against the known
@@ -288,7 +326,8 @@ def _detect_currency(text: str) -> str:
     return DEFAULT_CURRENCY
 
 
-def _detect_document_type(text: str) -> FinancialDocumentType:
+# Read the document type from explicit wording in the text.
+def _detect_document_type(text: str) -> FinancialDocumentType | None:
     lowered = text.lower()
     if "tax invoice" in lowered or "invoice" in lowered:
         return "invoice"
@@ -298,7 +337,7 @@ def _detect_document_type(text: str) -> FinancialDocumentType:
         return "bill"
     if "receipt" in lowered:
         return "receipt"
-    return "receipt"
+    return None
 
 
 def _detect_dates(lines: list[str]) -> tuple[date | None, date | None]:
@@ -369,15 +408,19 @@ def _score_confidence(result: ExtractedFinancials, vendor_is_known: bool) -> flo
 def extract_financials(
     text: str,
     rules: Sequence[VendorRule] = (),
+    document_type_rules: Sequence[DocumentTypeRule] = (),
 ) -> ExtractedFinancials:
     lines = text.splitlines()
     vendor, category = _detect_vendor(text, rules)
     vendor_is_known = category is not None
-    document_type = _detect_document_type(text)
+    # The document's own wording is the source of truth.
+    document_type, document_type_source = _resolve_document_type(
+        text, document_type_rules)
     transaction_date, due_date = _detect_dates(lines)
 
     result = ExtractedFinancials(
         document_type=document_type,
+        document_type_source=document_type_source,
         vendor=vendor,
         transaction_date=transaction_date,
         due_date=due_date,
@@ -398,6 +441,7 @@ def row_to_financial_record(row: Record) -> FinancialRecordResponse:
         id=row["id"],
         upload_id=row["upload_id"],
         document_type=row["document_type"],
+        document_type_source=row["document_type_source"],
         vendor=row["vendor"],
         transaction_date=row["transaction_date"],
         due_date=row["due_date"],
@@ -433,14 +477,20 @@ class FinancialRecordService:
         repository: FinancialRecordRepository,
         vendor_rule_repository: VendorRuleRepository,
         correction_repository: ExtractionCorrectionRepository,
+        document_type_rule_repository: DocumentTypeRuleRepository,
     ) -> None:
         self.repository = repository
         self.vendor_rule_repository = vendor_rule_repository
         self.correction_repository = correction_repository
+        self.document_type_rule_repository = document_type_rule_repository
 
     async def _load_vendor_rules(self) -> list[VendorRule]:
         rows = await self.vendor_rule_repository.list_all()
         return [(row["keyword"], row["vendor"], row["category"]) for row in rows]
+
+    async def _load_document_type_rules(self) -> list[DocumentTypeRule]:
+        rows = await self.document_type_rule_repository.list_all()
+        return [(row["keyword"], row["document_type"]) for row in rows]
 
     # Run the rules engine over OCR text and persist the structured record.
     async def extract_and_store(self, *, upload_id: UUID, text: str | None) -> None:
@@ -451,10 +501,12 @@ class FinancialRecordService:
             return
 
         rules = await self._load_vendor_rules()
-        extracted = extract_financials(text, rules)
+        document_type_rules = await self._load_document_type_rules()
+        extracted = extract_financials(text, rules, document_type_rules)
         await self.repository.upsert_from_extraction(
             upload_id=upload_id,
             document_type=extracted.document_type,
+            document_type_source=extracted.document_type_source,
             vendor=extracted.vendor,
             transaction_date=extracted.transaction_date,
             due_date=extracted.due_date,
@@ -512,6 +564,11 @@ class FinancialRecordService:
         if "vendor" in update_data or "category" in update_data:
             await self._learn_rule_from_record(row)
 
+        # A correction to the document type teaches a rule keyed by vendor so
+        # future documents from the same vendor are classified the same way.
+        if "document_type" in update_data:
+            await self._learn_document_type_rule_from_record(existing, row)
+
         return row_to_financial_record(row)
 
     # Log one correction event
@@ -561,3 +618,26 @@ class FinancialRecordService:
         except Exception:
             logger.exception(
                 "Failed to learn vendor rule from record %s", row["id"])
+
+    async def _learn_document_type_rule_from_record(
+        self,
+        before: Record,
+        after: Record,
+    ) -> None:
+        if before["document_type_source"] == "document":
+            return
+
+        vendor = (after["vendor"] or "").strip()
+        document_type = (after["document_type"] or "").strip()
+
+        if not vendor or not document_type:
+            return
+
+        try:
+            await self.document_type_rule_repository.upsert(
+                keyword=vendor.lower(),
+                document_type=document_type,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to learn document-type rule from record %s", after["id"])

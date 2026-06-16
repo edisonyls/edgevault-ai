@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.auth import CurrentWorkspaceDep
 from app.core.database import DatabasePoolDep
+from app.repositories.document_type_rules import DocumentTypeRuleRepository
 from app.repositories.extraction_corrections import ExtractionCorrectionRepository
 from app.repositories.financial_records import FinancialRecordRepository
 from app.repositories.vendor_rules import VendorRuleRepository
@@ -28,6 +29,7 @@ def get_financial_record_service(
         FinancialRecordRepository(database_pool, workspace.id),
         VendorRuleRepository(database_pool, workspace.id),
         ExtractionCorrectionRepository(database_pool),
+        DocumentTypeRuleRepository(database_pool, workspace.id),
     )
 
 

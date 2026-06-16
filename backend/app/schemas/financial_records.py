@@ -19,12 +19,14 @@ FinancialCategory = Literal[
 ]
 PaymentStatus = Literal["paid", "unpaid", "unknown"]
 ExtractionMethod = Literal["rules_v1", "manual"]
+DocumentTypeSource = Literal["document", "learned", "default"]
 
 
 class FinancialRecordResponse(BaseModel):
     id: UUID
     upload_id: UUID
     document_type: FinancialDocumentType | None
+    document_type_source: DocumentTypeSource | None
     vendor: str | None
     transaction_date: date | None
     due_date: date | None
