@@ -16,6 +16,7 @@ Usage:
 
 import asyncio
 import sys
+import time
 from pathlib import Path
 
 import asyncpg
@@ -110,7 +111,22 @@ async def _predict(extractor: Extractor, text: str) -> dict[str, object]:
 async def print_offline_report(
     extractor: Extractor, examples: list[tuple[dict, str]]
 ) -> None:
-    scored = [(gold, await _predict(extractor, text)) for gold, text in examples]
+    show_progress = getattr(extractor, "extract_async", None) is not None
+    total = len(examples)
+    started = time.monotonic()
+
+    scored = []
+    for index, (gold, text) in enumerate(examples, start=1):
+        predicted = await _predict(extractor, text)
+        scored.append((gold, predicted))
+        if show_progress:
+            elapsed = time.monotonic() - started
+            print(
+                f"  [{index}/{total}] {elapsed:.0f}s elapsed",
+                file=sys.stderr,
+                flush=True,
+            )
+
     report = evaluate(scored, SNAPSHOT_FIELDS)
 
     print(f"\n=== Offline accuracy — extractor: {extractor.name} ===")
