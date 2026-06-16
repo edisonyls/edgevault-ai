@@ -12,3 +12,6 @@ __pycache__/
 htmlcov/
 
 var/uploads/
+prod_snapshot.sql
+dump_err.txt
+var/datasets/
