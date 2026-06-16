@@ -24,6 +24,7 @@ _FINANCIAL_RECORD_COLUMNS = """
     f.id AS fr_id,
     f.upload_id AS fr_upload_id,
     f.document_type AS fr_document_type,
+    f.document_type_source AS fr_document_type_source,
     f.vendor AS fr_vendor,
     f.transaction_date AS fr_transaction_date,
     f.due_date AS fr_due_date,

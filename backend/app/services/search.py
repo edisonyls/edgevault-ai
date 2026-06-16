@@ -24,6 +24,7 @@ def _row_to_financial_record(row: Record) -> FinancialRecordResponse | None:
         id=row["fr_id"],
         upload_id=row["fr_upload_id"],
         document_type=row["fr_document_type"],
+        document_type_source=row["fr_document_type_source"],
         vendor=row["fr_vendor"],
         transaction_date=row["fr_transaction_date"],
         due_date=row["fr_due_date"],
