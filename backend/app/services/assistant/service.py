@@ -200,6 +200,7 @@ class AssistantService:
             "top_spending_category": self._top_spending_category,
             "category_total": self._category_total,
             "vendor_total": self._vendor_total,
+            "top_vendor": self._top_vendor,
             "vendor_list": self._vendor_list,
             "document_count": self._document_count,
             "unpaid_bills": self._unpaid_bills,
@@ -303,6 +304,27 @@ class AssistantService:
         answer = (
             f"You spent {_money(aggregate['total'])} at {vendor}"
             f"{_suffix(intent.period_label)}, across {count} {_plural('record', count)}."
+        )
+        return answer, _to_supporting(records)
+
+    async def _top_vendor(self, intent: Intent) -> tuple[str, list[SupportingRecord]]:
+        row = await self.repository.top_vendor(
+            date_from=intent.date_from, date_to=intent.date_to
+        )
+        if row is None or row["total"] is None:
+            return f"I couldn't find any spending records{_suffix(intent.period_label)}.", []
+
+        vendor = row["vendor"]
+        records = await self.repository.records(
+            vendor=vendor,
+            date_from=intent.date_from,
+            date_to=intent.date_to,
+            order="amount",
+            limit=EVIDENCE_LIMIT,
+        )
+        answer = (
+            f"You spend the most at {vendor}{_suffix(intent.period_label)}, "
+            f"at {_money(row['total'])}."
         )
         return answer, _to_supporting(records)
 

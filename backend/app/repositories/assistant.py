@@ -188,6 +188,31 @@ class AssistantRepository:
                 self.workspace_id,
             )
 
+    # Highest-spending vendor within an optional date window.
+    async def top_vendor(self, *, date_from: date | None, date_to: date | None) -> Record | None:
+        async with self.database_pool.acquire() as connection:
+            return await connection.fetchrow(
+                """
+                SELECT
+                    vendor,
+                    SUM(total_amount) AS total,
+                    COUNT(*) AS count
+                FROM financial_records
+                JOIN resume_uploads ON resume_uploads.id = financial_records.upload_id
+                WHERE resume_uploads.workspace_id = $1
+                  AND total_amount IS NOT NULL
+                  AND vendor IS NOT NULL
+                  AND ($2::date IS NULL OR transaction_date >= $2)
+                  AND ($3::date IS NULL OR transaction_date <= $3)
+                GROUP BY vendor
+                ORDER BY total DESC
+                LIMIT 1
+                """,
+                self.workspace_id,
+                date_from,
+                date_to,
+            )
+
     # Total spent at one vendor within an optional date window.
     async def vendor_aggregate(
         self, *, vendor: str, date_from: date | None, date_to: date | None

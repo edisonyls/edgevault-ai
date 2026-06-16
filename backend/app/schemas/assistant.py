@@ -11,6 +11,7 @@ AssistantQueryType = Literal[
     "top_spending_category",
     "category_total",
     "vendor_total",
+    "top_vendor",
     "vendor_list",
     "document_count",
     "unpaid_bills",
