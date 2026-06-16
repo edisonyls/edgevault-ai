@@ -5,6 +5,7 @@ import { LogOut } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { workspaceNavigation } from "@/config/navigation";
 import { Metric } from "@/components/ui/summary-tile";
+import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { useAuth } from "@/features/auth/components/auth-gate";
 
 type AppSidebarProps = {
@@ -28,6 +29,7 @@ export function AppSidebar({
   const { session, signOut } = useAuth();
 
   return (
+    <>
     <Surface
       render={(props) => <aside {...props} />}
       className="sticky top-0 z-30 border-b border-slate-200 bg-white px-5 py-4 lg:static lg:w-64 lg:border-b-0 lg:border-r lg:px-6 lg:py-6"
@@ -124,5 +126,8 @@ export function AppSidebar({
         </Surface>
       </Surface>
     </Surface>
+
+    <MobileTabBar />
+    </>
   );
 }

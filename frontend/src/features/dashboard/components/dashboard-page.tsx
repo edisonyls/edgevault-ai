@@ -51,7 +51,7 @@ export function DashboardPage() {
     <Surface
       render={(props) => <main {...props} />}
       id="main-content"
-      className="min-h-screen bg-[#f7f8fb] text-slate-950"
+      className="min-h-screen bg-[#f7f8fb] pb-20 text-slate-950 lg:pb-0"
     >
       <Link
         href="#dashboard"

@@ -34,7 +34,7 @@ export function VendorRulesPage() {
     <Surface
       render={(props) => <main {...props} />}
       id="main-content"
-      className="min-h-screen bg-[#f7f8fb] text-slate-950"
+      className="min-h-screen bg-[#f7f8fb] pb-20 text-slate-950 lg:pb-0"
     >
       <Link
         href="#vendors"
@@ -45,7 +45,7 @@ export function VendorRulesPage() {
 
       <Surface
         variant="transparent"
-        className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col lg:flex-row"
+        className="mx-auto flex min-h-screen w-full max-w-400 flex-col lg:flex-row"
       >
         <AppSidebar
           documentCount={documents.length}
