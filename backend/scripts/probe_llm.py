@@ -44,8 +44,8 @@ async def probe(
     client: httpx.AsyncClient, url: str, payload: dict, label: str
 ) -> None:
     print(f"\n--- {label} ---")
-    print(
-        f"payload extras: {{k: v for k, v in payload.items() if k != 'messages'}}")
+    extras = {k: v for k, v in payload.items() if k != "messages"}
+    print(f"payload extras: {extras}")
     start = time.monotonic()
     try:
         response = await client.post(url, json=payload)
