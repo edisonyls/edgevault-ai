@@ -59,6 +59,9 @@ TOTAL_KEYWORDS: list[tuple[str, int]] = [
 LOOKAHEAD_MIN_WEIGHT = 2
 VALUE_LOOKAHEAD_LINES = 2
 MAX_LABEL_WORDS = 6
+# Shortest collapsed keyword allowed to match a condensed domain/email, to avoid
+# spurious hits from very short vendor names.
+MIN_COLLAPSED_KEYWORD_LENGTH = 5
 
 AMOUNT_RE = re.compile(r"\d[\d,]*\.\d{2}")
 
@@ -168,6 +171,18 @@ def _match_rules(
         if match and (best is None or match.start() < best[0]):
             best = (match.start(), vendor, category)
 
+    if best is not None:
+        return best[1], best[2]
+
+    collapsed = re.sub(r"\s+", "", lowered)
+    for keyword, vendor, category in rules:
+        token = re.sub(r"\s+", "", keyword)
+        if " " not in keyword or len(token) < MIN_COLLAPSED_KEYWORD_LENGTH:
+            continue
+        idx = collapsed.find(token)
+        if idx != -1 and (best is None or idx < best[0]):
+            best = (idx, vendor, category)
+
     return (best[1], best[2]) if best is not None else None
 
 
@@ -251,6 +266,12 @@ def _pick_line_amount(amounts: list[tuple[bool, Decimal]]) -> tuple[bool, Decima
     return False, amounts[-1][1]
 
 
+def _pick_stacked_amount(amounts: list[tuple[bool, Decimal]]) -> tuple[bool, Decimal]:
+    symboled = [amount for has_symbol, amount in amounts if has_symbol]
+    pool = symboled if symboled else [amount for _, amount in amounts]
+    return bool(symboled), max(pool)
+
+
 def _is_label_line(line: str) -> bool:
     return len(line.split()) <= MAX_LABEL_WORDS
 
@@ -258,17 +279,24 @@ def _is_label_line(line: str) -> bool:
 # When a label sits on its own line, scan the next few non-empty lines for the
 # value printed beneath it.
 def _lookahead_amount(lines: list[str], start: int) -> tuple[bool, Decimal] | None:
+    collected: list[tuple[bool, Decimal]] = []
     seen = 0
     for line in lines[start + 1:]:
         if not line.strip():
             continue
         amounts = _currency_amounts(line)
         if amounts:
-            return _pick_line_amount(amounts)
+            collected.extend(amounts)
+            continue
+        # The first non-empty line without an amount ends the value stack.
+        if collected:
+            break
         seen += 1
         if seen >= VALUE_LOOKAHEAD_LINES:
             break
-    return None
+    if not collected:
+        return None
+    return _pick_stacked_amount(collected)
 
 
 # Detect the total amount by looking for lines containing total-related keywords.

@@ -165,11 +165,14 @@ def match_category(lowered: str) -> str | None:
     return best[1] if best is not None else None
 
 
+# Words signalling "the single biggest", e.g. "what do I spend the most on".
+_SUPERLATIVES = ("most", "highest", "biggest", "largest", "top")
+
+
 def _wants_top(lowered: str) -> bool:
-    superlatives = ("most", "highest", "biggest", "largest", "top")
     spend_terms = ("spend", "spent", "spending",
                    "expense", "expenses", "cost", "costs")
-    return any(word in lowered for word in superlatives) and any(
+    return any(word in lowered for word in _SUPERLATIVES) and any(
         word in lowered for word in spend_terms
     )
 
@@ -178,6 +181,13 @@ def _wants_top(lowered: str) -> bool:
 _VENDOR_LIST_RE = re.compile(
     r"\b(?:vendors?|merchants?|payees?|suppliers?)\b|\bwho (?:do|am) i pay(?:ing)?\b"
 )
+
+
+def _wants_top_vendor(lowered: str) -> bool:
+    """A superlative aimed at vendors, e.g. "which vendor do I pay the most"."""
+    return bool(_VENDOR_LIST_RE.search(lowered)) and any(
+        word in lowered for word in _SUPERLATIVES
+    )
 
 # "how many invoices / documents / receipts do I have" -> a document count.
 # Deliberately excludes "bills" so unpaid-bill questions still route to unpaid.
@@ -271,6 +281,11 @@ def parse_intent(question: str, today: date | None = None) -> Intent:
             date_to=date_to,
             period_label=period_label,
         )
+
+    # superlative + vendor -> the single biggest vendor. Checked before the plain
+    # vendor list so "which vendor do I pay the most" names one, not all six.
+    if _wants_top_vendor(lowered):
+        return intent("top_vendor")
 
     # "vendors" / "merchants" / "who do I pay" -> list the businesses on record.
     # Checked first so "not unpaid bills, but vendors" lands here, not on unpaid.
