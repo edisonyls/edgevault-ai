@@ -31,9 +31,36 @@ env:
   DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
 
 jobs:
+  test:
+    name: Backend tests
+    runs-on: [self-hosted, backend]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          cd backend
+          uv sync --frozen
+
+      - name: Lint
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          cd backend
+          uv run ruff check .
+
+      - name: Run tests
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          cd backend
+          uv run pytest
+
   deploy:
     name: Deploy backend VM
     runs-on: [self-hosted, backend]
+    needs: test
 
     steps:
       - name: Checkout repository
