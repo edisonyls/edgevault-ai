@@ -45,17 +45,18 @@ VendorRule = tuple[str, str, FinancialCategory]
 
 DocumentTypeRule = tuple[str, FinancialDocumentType]
 
-# Higher weight wins; "subtotal" lines are ignored entirely.
+# Keyword ranking
 TOTAL_KEYWORDS: list[tuple[str, int]] = [
-    ("balance due", 4),
-    ("amount due", 4),
-    ("total due", 4),
-    ("grand total", 3),
-    ("total amount", 3),
-    ("total", 1),
+    ("grand total", 5),
+    ("invoice amount", 5),
+    ("total amount", 5),
+    ("total", 3),
+    ("total due", 2),
+    ("amount due", 2),
+    ("balance due", 2),
 ]
 
-LOOKAHEAD_MIN_WEIGHT = 3
+LOOKAHEAD_MIN_WEIGHT = 2
 VALUE_LOOKAHEAD_LINES = 2
 MAX_LABEL_WORDS = 6
 
@@ -374,10 +375,10 @@ def _detect_payment_status(
     due_date: date | None,
 ) -> PaymentStatus:
     lowered = text.lower()
-    if any(marker in lowered for marker in ("amount due", "balance due", "outstanding")):
-        return "unpaid"
     if "paid" in lowered or "payment received" in lowered:
         return "paid"
+    if any(marker in lowered for marker in ("amount due", "balance due", "outstanding")):
+        return "unpaid"
     if document_type == "receipt":
         return "paid"
     if due_date is not None:
