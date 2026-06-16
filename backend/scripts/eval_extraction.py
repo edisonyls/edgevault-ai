@@ -42,7 +42,12 @@ from app.services.financial_extraction import (  # noqa: E402
 # RAG extraction prompts are larger than intent prompts and the Pi is slow, so
 # give the local model more room than the assistant's default timeout.
 RAG_LLM_TIMEOUT = 120.0
-RAG_TOP_K = 3
+RAG_TOP_K = 2
+RAG_LLM_EXTRA_PARAMS: dict[str, object] = {
+    "temperature": 0,
+    "max_tokens": 256,
+    "response_format": {"type": "json_object"},
+}
 
 # Pull the latest succeeded OCR text for each upload that has a manually
 # corrected record, and treat the corrected record as the gold label.
@@ -169,7 +174,7 @@ async def run_rag_report(
         base_url=settings.assistant_llm_base_url,
         model=settings.assistant_llm_model,
         timeout=RAG_LLM_TIMEOUT,
-        extra_params={"temperature": 0},
+        extra_params=RAG_LLM_EXTRA_PARAMS,
     )
     # A vector-codec-aware pool so the query embedding encodes for `<=>`.
     pool = await create_database_pool(settings)

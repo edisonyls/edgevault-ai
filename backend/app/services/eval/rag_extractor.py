@@ -28,39 +28,26 @@ PAYMENT_STATUSES = frozenset({"paid", "unpaid", "unknown"})
 
 # Keep the prompt lean: the Pi runs a 1.5B model with a small context window, so
 # cap how much OCR text each demonstration and the query contribute.
-MAX_DEMO_CHARS = 1200
-MAX_QUERY_CHARS = 1600
+MAX_DEMO_CHARS = 700
+MAX_QUERY_CHARS = 900
 
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-SYSTEM_PROMPT = """You extract structured fields from a financial document's \
-OCR text (receipts, invoices, bills, statements).
-
-Reply with ONLY a JSON object, no prose and no code fences, with exactly these keys:
-{
-  "document_type": one of "receipt","invoice","bill","statement","other", or null,
-  "vendor": the merchant/biller name as a short string, or null,
-  "transaction_date": the date on the document as "YYYY-MM-DD", or null,
-  "due_date": the payment due date as "YYYY-MM-DD", or null,
-  "total_amount": the total payable as a plain number string e.g. "123.45", or null,
-  "currency": the 3-letter ISO code e.g. "AUD","USD", or null,
-  "category": one of "groceries","utilities","internet_phone","transport",\
-"subscription","other", or null,
-  "payment_status": one of "paid","unpaid","unknown", or null
-}
-
-Rules:
-- Use null when the document does not state a field; never guess.
-- total_amount is the final grand total: digits with a decimal point, no \
-currency symbol and no thousands separators.
-- "utilities" = electricity/gas/water; "internet_phone" = internet/mobile/phone; \
-"transport" = fuel/petrol/rideshare/transit/parking.
-- A receipt that has been paid is "paid"; an invoice or bill with a due date and \
-no payment confirmation is "unpaid"; otherwise "unknown".
-
-The examples below are real documents from this same workspace with their correct \
-answers. Match their conventions."""
+SYSTEM_PROMPT = """Extract fields from a financial document's OCR text. \
+Output ONLY one JSON object, no prose, no code fences. Use null for anything the \
+document does not state; never guess. Keys and allowed values:
+{"document_type": "receipt"|"invoice"|"bill"|"statement"|"other"|null,
+ "vendor": string|null,
+ "transaction_date": "YYYY-MM-DD"|null,
+ "due_date": "YYYY-MM-DD"|null,
+ "total_amount": number-string e.g. "123.45" (no symbol, no commas)|null,
+ "currency": 3-letter code e.g. "AUD"|null,
+ "category": "groceries"|"utilities"|"internet_phone"|"transport"|"subscription"|"other"|null,
+ "payment_status": "paid"|"unpaid"|"unknown"|null}
+total_amount is the final grand total. utilities=electricity/gas/water; \
+internet_phone=internet/mobile/phone; transport=fuel/rideshare/transit/parking. \
+The worked examples that follow are from this same workspace."""
 
 
 @dataclass(slots=True)

@@ -51,5 +51,9 @@ class ChatCompletionClient:
                 return data["choices"][0]["message"]["content"]
         except (httpx.HTTPError, KeyError, IndexError, ValueError) as error:
             logger.warning(
-                "Chat completion failed for model %s: %s", self.model, error)
+                "Chat completion failed for model %s: %s: %s",
+                self.model,
+                type(error).__name__,
+                error,
+            )
             return None
