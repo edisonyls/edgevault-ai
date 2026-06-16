@@ -120,7 +120,8 @@ class UploadService:
         self.upload_repository = upload_repository
         self.upload_storage_dir = upload_storage_dir
 
-    # Resolve the storage path for a given file path, ensuring it is within the upload storage directory.
+    # Resolve the storage path for a given file path, ensuring it is within the
+    # upload storage directory.
     def resolve_storage_path(self, file_path: str) -> Path:
         relative_path = PurePosixPath(file_path)
 

@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.database import DatabasePoolDep
+from app.repositories.extraction_corrections import ExtractionCorrectionRepository
 from app.repositories.financial_records import FinancialRecordRepository
 from app.repositories.vendor_rules import VendorRuleRepository
 from app.schemas.financial_records import (
@@ -22,6 +23,7 @@ def get_financial_record_service(database_pool: DatabasePoolDep) -> FinancialRec
     return FinancialRecordService(
         FinancialRecordRepository(database_pool),
         VendorRuleRepository(database_pool),
+        ExtractionCorrectionRepository(database_pool),
     )
 
 

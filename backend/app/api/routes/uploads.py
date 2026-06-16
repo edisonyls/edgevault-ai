@@ -16,6 +16,7 @@ from app.core.config import Settings, get_settings
 from app.core.database import DatabasePoolDep
 from app.repositories.document_embeddings import DocumentEmbeddingRepository
 from app.repositories.document_extractions import DocumentExtractionRepository
+from app.repositories.extraction_corrections import ExtractionCorrectionRepository
 from app.repositories.financial_records import FinancialRecordRepository
 from app.repositories.uploads import UploadRepository
 from app.repositories.vendor_rules import VendorRuleRepository
@@ -66,6 +67,7 @@ def get_financial_record_service(database_pool: DatabasePoolDep) -> FinancialRec
     return FinancialRecordService(
         FinancialRecordRepository(database_pool),
         VendorRuleRepository(database_pool),
+        ExtractionCorrectionRepository(database_pool),
     )
 
 

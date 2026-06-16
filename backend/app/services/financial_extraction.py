@@ -8,6 +8,7 @@ from uuid import UUID
 
 from asyncpg import Record
 
+from app.repositories.extraction_corrections import ExtractionCorrectionRepository
 from app.repositories.financial_records import FinancialRecordRepository
 from app.repositories.vendor_rules import VendorRuleRepository
 from app.schemas.financial_records import (
@@ -23,6 +24,18 @@ logger = logging.getLogger(__name__)
 RULES_VERSION = "rules_v1"
 DEFAULT_CURRENCY = "AUD"
 MAX_VENDOR_GUESS_LENGTH = 60
+
+# Record fields that make up one labelled example.
+SNAPSHOT_FIELDS = (
+    "document_type",
+    "vendor",
+    "transaction_date",
+    "due_date",
+    "total_amount",
+    "currency",
+    "category",
+    "payment_status",
+)
 
 # All vendor rules now live in the vendor_rules table so the engine matches
 # against the rules passed in from the database rather than a hardcoded list.
@@ -399,14 +412,31 @@ def row_to_financial_record(row: Record) -> FinancialRecordResponse:
     )
 
 
+# Snapshot a record's extracted fields into a JSON-serialisable dict. Dates and
+# Decimals become strings so the snapshot round-trips cleanly through JSONB.
+def _record_snapshot(row: Record) -> dict[str, object]:
+    snapshot: dict[str, object] = {}
+    for field in SNAPSHOT_FIELDS:
+        value = row[field]
+        if isinstance(value, Decimal):
+            snapshot[field] = str(value)
+        elif isinstance(value, date):
+            snapshot[field] = value.isoformat()
+        else:
+            snapshot[field] = value
+    return snapshot
+
+
 class FinancialRecordService:
     def __init__(
         self,
         repository: FinancialRecordRepository,
         vendor_rule_repository: VendorRuleRepository,
+        correction_repository: ExtractionCorrectionRepository,
     ) -> None:
         self.repository = repository
         self.vendor_rule_repository = vendor_rule_repository
+        self.correction_repository = correction_repository
 
     async def _load_vendor_rules(self) -> list[VendorRule]:
         rows = await self.vendor_rule_repository.list_all()
@@ -462,13 +492,20 @@ class FinancialRecordService:
         update: FinancialRecordUpdate,
     ) -> FinancialRecordResponse | None:
         update_data = update.model_dump(exclude_unset=True)
+
+        existing = await self.repository.get(record_id)
+        if existing is None:
+            return None
         if not update_data:
-            existing = await self.repository.get(record_id)
-            return row_to_financial_record(existing) if existing is not None else None
+            return row_to_financial_record(existing)
 
         row = await self.repository.update(record_id, update_data)
         if row is None:
             return None
+
+        # Capture the before/after as a labelled example before anything else
+        # consumes the correction.
+        await self._capture_correction(existing, row, set(update_data))
 
         # A correction to vendor or category teaches a reusable rule so future
         # documents mentioning this vendor are categorised automatically.
@@ -476,6 +513,37 @@ class FinancialRecordService:
             await self._learn_rule_from_record(row)
 
         return row_to_financial_record(row)
+
+    # Log one correction event
+    async def _capture_correction(
+        self,
+        before: Record,
+        after: Record,
+        updated_fields: set[str],
+    ) -> None:
+        try:
+            predicted = _record_snapshot(before)
+            corrected = _record_snapshot(after)
+            changed = sorted(
+                field
+                for field in updated_fields
+                if field in SNAPSHOT_FIELDS
+                and predicted.get(field) != corrected.get(field)
+            )
+            if not changed:
+                return
+
+            await self.correction_repository.insert(
+                upload_id=after["upload_id"],
+                financial_record_id=after["id"],
+                predicted=predicted,
+                corrected=corrected,
+                changed_fields=changed,
+                extraction_method=before["extraction_method"],
+            )
+        except Exception:
+            logger.exception(
+                "Failed to capture correction for record %s", after["id"])
 
     async def _learn_rule_from_record(self, row: Record) -> None:
         vendor = (row["vendor"] or "").strip()
