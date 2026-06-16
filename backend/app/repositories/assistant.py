@@ -1,5 +1,6 @@
 from datetime import date
 from typing import Literal
+from uuid import UUID
 
 from asyncpg import Pool, Record
 
@@ -31,8 +32,9 @@ class AssistantRepository:
     real, attributable numbers.
     """
 
-    def __init__(self, database_pool: Pool) -> None:
+    def __init__(self, database_pool: Pool, workspace_id: UUID) -> None:
         self.database_pool = database_pool
+        self.workspace_id = workspace_id
 
     # The database server's clock — the single source of truth for "today" so
     # relative periods ("this month") don't drift from the app process timezone.
@@ -46,10 +48,17 @@ class AssistantRepository:
         async with self.database_pool.acquire() as connection:
             return await connection.fetchrow(
                 """
-                INSERT INTO assistant_queries (question, answer, query_type, source)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO assistant_queries (
+                    workspace_id,
+                    question,
+                    answer,
+                    query_type,
+                    source
+                )
+                VALUES ($1, $2, $3, $4, $5)
                 RETURNING id, question, answer, query_type, source, created_at
                 """,
+                self.workspace_id,
                 question,
                 answer,
                 query_type,
@@ -66,14 +75,17 @@ class AssistantRepository:
                     SUM(total_amount) AS total,
                     COUNT(*) AS count
                 FROM financial_records
-                WHERE total_amount IS NOT NULL
+                JOIN resume_uploads ON resume_uploads.id = financial_records.upload_id
+                WHERE resume_uploads.workspace_id = $1
+                  AND total_amount IS NOT NULL
                   AND category IS NOT NULL
-                  AND ($1::date IS NULL OR transaction_date >= $1)
-                  AND ($2::date IS NULL OR transaction_date <= $2)
+                  AND ($2::date IS NULL OR transaction_date >= $2)
+                  AND ($3::date IS NULL OR transaction_date <= $3)
                 GROUP BY category
                 ORDER BY total DESC
                 LIMIT 1
                 """,
+                self.workspace_id,
                 date_from,
                 date_to,
             )
@@ -89,11 +101,14 @@ class AssistantRepository:
                     COALESCE(SUM(total_amount), 0) AS total,
                     COUNT(*) AS count
                 FROM financial_records
-                WHERE category = $1
+                JOIN resume_uploads ON resume_uploads.id = financial_records.upload_id
+                WHERE resume_uploads.workspace_id = $1
+                  AND category = $2
                   AND total_amount IS NOT NULL
-                  AND ($2::date IS NULL OR transaction_date >= $2)
-                  AND ($3::date IS NULL OR transaction_date <= $3)
+                  AND ($3::date IS NULL OR transaction_date >= $3)
+                  AND ($4::date IS NULL OR transaction_date <= $4)
                 """,
+                self.workspace_id,
                 category,
                 date_from,
                 date_to,
@@ -111,13 +126,16 @@ class AssistantRepository:
                     SUM(total_amount) AS total,
                     COUNT(*) AS count
                 FROM financial_records
-                WHERE total_amount IS NOT NULL
+                JOIN resume_uploads ON resume_uploads.id = financial_records.upload_id
+                WHERE resume_uploads.workspace_id = $1
+                  AND total_amount IS NOT NULL
                   AND category IS NOT NULL
-                  AND ($1::date IS NULL OR transaction_date >= $1)
-                  AND ($2::date IS NULL OR transaction_date <= $2)
+                  AND ($2::date IS NULL OR transaction_date >= $2)
+                  AND ($3::date IS NULL OR transaction_date <= $3)
                 GROUP BY category
                 ORDER BY total DESC
                 """,
+                self.workspace_id,
                 date_from,
                 date_to,
             )
@@ -134,10 +152,13 @@ class AssistantRepository:
                     COUNT(*) AS count,
                     COALESCE(SUM(total_amount), 0) AS total
                 FROM financial_records
-                WHERE payment_status = 'unpaid'
-                  AND ($1::date IS NULL OR due_date >= $1)
-                  AND ($2::date IS NULL OR due_date <= $2)
+                JOIN resume_uploads ON resume_uploads.id = financial_records.upload_id
+                WHERE resume_uploads.workspace_id = $1
+                  AND payment_status = 'unpaid'
+                  AND ($2::date IS NULL OR due_date >= $2)
+                  AND ($3::date IS NULL OR due_date <= $3)
                 """,
+                self.workspace_id,
                 date_from,
                 date_to,
             )
@@ -152,10 +173,13 @@ class AssistantRepository:
                     COUNT(*) AS count,
                     COALESCE(SUM(total_amount), 0) AS total
                 FROM financial_records
-                WHERE category = 'subscription'
+                JOIN resume_uploads ON resume_uploads.id = financial_records.upload_id
+                WHERE resume_uploads.workspace_id = $1
+                  AND category = 'subscription'
                 GROUP BY vendor
                 ORDER BY vendor NULLS LAST
-                """
+                """,
+                self.workspace_id,
             )
 
     # Individual records used as supporting evidence for an answer.
@@ -171,8 +195,8 @@ class AssistantRepository:
         order: EvidenceOrder = "amount",
         limit: int = 10,
     ) -> list[Record]:
-        values: list[object] = []
-        where: list[str] = []
+        values: list[object] = [self.workspace_id]
+        where: list[str] = ["resume_uploads.workspace_id = $1"]
 
         if require_amount:
             where.append("total_amount IS NOT NULL")
@@ -200,6 +224,7 @@ class AssistantRepository:
                 SELECT
                     {_EVIDENCE_COLUMNS}
                 FROM financial_records
+                JOIN resume_uploads ON resume_uploads.id = financial_records.upload_id
                 {where_clause}
                 ORDER BY {_ORDER_BY[order]}
                 LIMIT {limit_placeholder}

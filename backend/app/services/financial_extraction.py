@@ -534,6 +534,7 @@ class FinancialRecordService:
                 return
 
             await self.correction_repository.insert(
+                workspace_id=self.repository.workspace_id,
                 upload_id=after["upload_id"],
                 financial_record_id=after["id"],
                 predicted=predicted,

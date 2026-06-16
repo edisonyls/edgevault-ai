@@ -3,6 +3,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 
+from app.core.auth import CurrentWorkspaceDep
 from app.core.config import Settings, get_settings
 from app.core.database import DatabasePoolDep
 from app.repositories.document_embeddings import DocumentEmbeddingRepository
@@ -25,17 +26,19 @@ MAX_SEARCH_LIMIT = 500
 def get_search_service(
     database_pool: DatabasePoolDep,
     settings: Annotated[Settings, Depends(get_settings)],
+    workspace: CurrentWorkspaceDep,
 ) -> SearchService:
     embedding_service: EmbeddingService | None = None
     if settings.embeddings_enabled:
         embedding_service = EmbeddingService(
-            repository=DocumentEmbeddingRepository(database_pool),
+            repository=DocumentEmbeddingRepository(
+                database_pool, workspace.id),
             model=get_embedding_model(settings),
             chunk_size=settings.embedding_chunk_size,
             chunk_overlap=settings.embedding_chunk_overlap,
         )
 
-    return SearchService(SearchRepository(database_pool), embedding_service)
+    return SearchService(SearchRepository(database_pool, workspace.id), embedding_service)
 
 
 type SearchServiceDep = Annotated[SearchService, Depends(get_search_service)]

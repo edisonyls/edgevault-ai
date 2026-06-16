@@ -6,6 +6,7 @@ from asyncpg import Pool, Record
 
 EXTRACTION_CORRECTION_COLUMNS = """
     id,
+    workspace_id,
     upload_id,
     financial_record_id,
     predicted,
@@ -24,6 +25,7 @@ class ExtractionCorrectionRepository:
     async def insert(
         self,
         *,
+        workspace_id: UUID,
         upload_id: UUID,
         financial_record_id: UUID,
         predicted: dict[str, object],
@@ -35,6 +37,7 @@ class ExtractionCorrectionRepository:
             return await connection.fetchrow(
                 f"""
                 INSERT INTO extraction_corrections (
+                    workspace_id,
                     upload_id,
                     financial_record_id,
                     predicted,
@@ -42,10 +45,11 @@ class ExtractionCorrectionRepository:
                     changed_fields,
                     extraction_method
                 )
-                VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6)
+                VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7)
                 RETURNING
                     {EXTRACTION_CORRECTION_COLUMNS}
                 """,
+                workspace_id,
                 upload_id,
                 financial_record_id,
                 json.dumps(predicted),

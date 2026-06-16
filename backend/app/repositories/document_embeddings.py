@@ -4,8 +4,9 @@ from asyncpg import Pool, Record
 
 
 class DocumentEmbeddingRepository:
-    def __init__(self, database_pool: Pool) -> None:
+    def __init__(self, database_pool: Pool, workspace_id: UUID) -> None:
         self.database_pool = database_pool
+        self.workspace_id = workspace_id
 
     # Replace all embeddings for an upload in one transaction so re-embedding a
     # document is idempotent.
@@ -19,8 +20,15 @@ class DocumentEmbeddingRepository:
         async with self.database_pool.acquire() as connection:
             async with connection.transaction():
                 await connection.execute(
-                    "DELETE FROM document_embeddings WHERE upload_id = $1",
+                    """
+                    DELETE FROM document_embeddings
+                    USING resume_uploads
+                    WHERE document_embeddings.upload_id = $1
+                      AND resume_uploads.id = document_embeddings.upload_id
+                      AND resume_uploads.workspace_id = $2
+                    """,
                     upload_id,
+                    self.workspace_id,
                 )
 
                 if not chunks:
@@ -35,11 +43,23 @@ class DocumentEmbeddingRepository:
                         embedding_model,
                         embedding
                     )
-                    VALUES ($1, $2, $3, $4, $5)
+                    SELECT $1, $2, $3, $4, $5
+                    WHERE EXISTS (
+                        SELECT 1
+                        FROM resume_uploads
+                        WHERE id = $1
+                          AND workspace_id = $6
+                    )
                     """,
                     [
-                        (upload_id, chunk_index, content,
-                         embedding_model, embedding)
+                        (
+                            upload_id,
+                            chunk_index,
+                            content,
+                            embedding_model,
+                            embedding,
+                            self.workspace_id,
+                        )
                         for chunk_index, content, embedding in chunks
                     ],
                 )
@@ -60,10 +80,13 @@ class DocumentEmbeddingRepository:
                     content,
                     embedding <=> $1 AS distance
                 FROM document_embeddings
+                JOIN resume_uploads ON resume_uploads.id = document_embeddings.upload_id
+                WHERE resume_uploads.workspace_id = $2
                 ORDER BY embedding <=> $1
-                LIMIT $2
+                LIMIT $3
                 """,
                 embedding,
+                self.workspace_id,
                 limit,
             )
 
@@ -71,5 +94,11 @@ class DocumentEmbeddingRepository:
     async def count(self) -> int:
         async with self.database_pool.acquire() as connection:
             return await connection.fetchval(
-                "SELECT count(*) FROM document_embeddings"
+                """
+                SELECT count(*)
+                FROM document_embeddings
+                JOIN resume_uploads ON resume_uploads.id = document_embeddings.upload_id
+                WHERE resume_uploads.workspace_id = $1
+                """,
+                self.workspace_id,
             )

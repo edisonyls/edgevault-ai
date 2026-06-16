@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.core.auth import CurrentWorkspaceDep
 from app.core.database import DatabasePoolDep
 from app.repositories.extraction_corrections import ExtractionCorrectionRepository
 from app.repositories.financial_records import FinancialRecordRepository
@@ -19,10 +20,13 @@ router = APIRouter(prefix="/financial-records", tags=["financial-records"])
 MAX_FINANCIAL_RECORD_LIST_LIMIT = 500
 
 
-def get_financial_record_service(database_pool: DatabasePoolDep) -> FinancialRecordService:
+def get_financial_record_service(
+    database_pool: DatabasePoolDep,
+    workspace: CurrentWorkspaceDep,
+) -> FinancialRecordService:
     return FinancialRecordService(
-        FinancialRecordRepository(database_pool),
-        VendorRuleRepository(database_pool),
+        FinancialRecordRepository(database_pool, workspace.id),
+        VendorRuleRepository(database_pool, workspace.id),
         ExtractionCorrectionRepository(database_pool),
     )
 

@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from app.core.auth import CurrentWorkspaceDep
 from app.core.database import DatabasePoolDep
 from app.repositories.vendor_rules import VendorRuleRepository
 from app.schemas.vendor_rules import (
@@ -15,8 +16,11 @@ from app.services.vendor_rules import VendorRuleConflictError, VendorRuleService
 router = APIRouter(prefix="/vendor-rules", tags=["vendor-rules"])
 
 
-def get_vendor_rule_service(database_pool: DatabasePoolDep) -> VendorRuleService:
-    return VendorRuleService(VendorRuleRepository(database_pool))
+def get_vendor_rule_service(
+    database_pool: DatabasePoolDep,
+    workspace: CurrentWorkspaceDep,
+) -> VendorRuleService:
+    return VendorRuleService(VendorRuleRepository(database_pool, workspace.id))
 
 
 type VendorRuleServiceDep = Annotated[VendorRuleService, Depends(

@@ -19,14 +19,20 @@ UPLOAD_RETURNING_COLUMNS = """
     updated_at
 """
 
+DISPLAY_FILENAME_UNIQUE_CONSTRAINTS = {
+    "idx_resume_uploads_display_filename",
+    "idx_resume_uploads_workspace_display_filename",
+}
+
 
 class UniqueDisplayFilenameError(Exception):
     pass
 
 
 class UploadRepository:
-    def __init__(self, database_pool: Pool) -> None:
+    def __init__(self, database_pool: Pool, workspace_id: UUID) -> None:
         self.database_pool = database_pool
+        self.workspace_id = workspace_id
 
     async def create(
         self,
@@ -43,6 +49,7 @@ class UploadRepository:
                 return await connection.fetchrow(
                     f"""
                     INSERT INTO resume_uploads (
+                        workspace_id,
                         original_filename,
                         display_filename,
                         stored_filename,
@@ -50,10 +57,11 @@ class UploadRepository:
                         mime_type,
                         file_size
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
                     RETURNING
                         {UPLOAD_RETURNING_COLUMNS}
                     """,
+                    self.workspace_id,
                     original_filename,
                     display_filename,
                     stored_filename,
@@ -62,7 +70,7 @@ class UploadRepository:
                     file_size,
                 )
         except UniqueViolationError as exc:
-            if exc.constraint_name != "idx_resume_uploads_display_filename":
+            if exc.constraint_name not in DISPLAY_FILENAME_UNIQUE_CONSTRAINTS:
                 raise
 
             raise UniqueDisplayFilenameError from exc
@@ -75,11 +83,12 @@ class UploadRepository:
         offset: int,
     ) -> list[Record]:
         values: list[object] = []
-        where_clause = ""
+        where = ["workspace_id = $1"]
+        values.append(self.workspace_id)
 
         if status_filter is not None:
             values.append(status_filter)
-            where_clause = "WHERE status = $1::resume_upload_status"
+            where.append(f"status = ${len(values)}::resume_upload_status")
 
         values.extend([limit, offset])
         limit_placeholder = f"${len(values) - 1}"
@@ -91,7 +100,7 @@ class UploadRepository:
                 SELECT
                     {UPLOAD_RETURNING_COLUMNS}
                 FROM resume_uploads
-                {where_clause}
+                WHERE {" AND ".join(where)}
                 ORDER BY created_at DESC, id DESC
                 LIMIT {limit_placeholder}
                 OFFSET {offset_placeholder}
@@ -107,8 +116,10 @@ class UploadRepository:
                     {UPLOAD_RETURNING_COLUMNS}
                 FROM resume_uploads
                 WHERE id = $1
+                  AND workspace_id = $2
                 """,
                 upload_id,
+                self.workspace_id,
             )
 
     async def update(
@@ -126,7 +137,7 @@ class UploadRepository:
                 placeholder = f"{placeholder}::resume_upload_status"
             set_clauses.append(f"{column} = {placeholder}")
 
-        values.append(upload_id)
+        values.extend([upload_id, self.workspace_id])
 
         try:
             async with self.database_pool.acquire() as connection:
@@ -134,14 +145,15 @@ class UploadRepository:
                     f"""
                     UPDATE resume_uploads
                     SET {", ".join(set_clauses)}
-                    WHERE id = ${len(values)}
+                    WHERE id = ${len(values) - 1}
+                      AND workspace_id = ${len(values)}
                     RETURNING
                         {UPLOAD_RETURNING_COLUMNS}
                     """,
                     *values,
                 )
         except UniqueViolationError as exc:
-            if exc.constraint_name != "idx_resume_uploads_display_filename":
+            if exc.constraint_name not in DISPLAY_FILENAME_UNIQUE_CONSTRAINTS:
                 raise
 
             raise UniqueDisplayFilenameError from exc
@@ -152,8 +164,10 @@ class UploadRepository:
                 """
                 DELETE FROM resume_uploads
                 WHERE id = $1
+                  AND workspace_id = $2
                 """,
                 upload_id,
+                self.workspace_id,
             )
 
         return result != "DELETE 0"

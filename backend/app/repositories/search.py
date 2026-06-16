@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 from asyncpg import Pool, Record
 
@@ -42,8 +43,9 @@ _HEADLINE_OPTIONS = "MaxFragments=2, MinWords=3, MaxWords=12, StartSel=<mark>, S
 
 
 class SearchRepository:
-    def __init__(self, database_pool: Pool) -> None:
+    def __init__(self, database_pool: Pool, workspace_id: UUID) -> None:
         self.database_pool = database_pool
+        self.workspace_id = workspace_id
 
     # Search documents by OCR text and/or structured filters.
     async def search(
@@ -59,8 +61,8 @@ class SearchRepository:
         limit: int,
         offset: int,
     ) -> list[Record]:
-        values: list[object] = []
-        where: list[str] = []
+        values: list[object] = [self.workspace_id]
+        where: list[str] = ["u.workspace_id = $1"]
 
         select_rank = "NULL::real AS rank"
         select_snippet = "left(u.text, 200) AS snippet"
@@ -135,8 +137,8 @@ class SearchRepository:
         limit: int,
         offset: int,
     ) -> list[Record]:
-        values: list[object] = [embedding]
-        where: list[str] = []
+        values: list[object] = [embedding, self.workspace_id]
+        where: list[str] = ["u.workspace_id = $2"]
 
         self._append_structured_filters(
             values=values,

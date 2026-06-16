@@ -13,8 +13,9 @@ VENDOR_RULE_COLUMNS = """
 
 
 class VendorRuleRepository:
-    def __init__(self, database_pool: Pool) -> None:
+    def __init__(self, database_pool: Pool, workspace_id: UUID) -> None:
         self.database_pool = database_pool
+        self.workspace_id = workspace_id
 
     # List every learned vendor rule, most recently updated first so the
     # freshest correction wins when two rules share a match position.
@@ -25,8 +26,10 @@ class VendorRuleRepository:
                 SELECT
                     {VENDOR_RULE_COLUMNS}
                 FROM vendor_rules
+                WHERE workspace_id = $1
                 ORDER BY updated_at DESC
-                """
+                """,
+                self.workspace_id,
             )
 
     # Learn a rule. Keyed by keyword so correcting the same vendor again just
@@ -35,14 +38,15 @@ class VendorRuleRepository:
         async with self.database_pool.acquire() as connection:
             return await connection.fetchrow(
                 f"""
-                INSERT INTO vendor_rules (keyword, vendor, category)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (keyword) DO UPDATE SET
+                INSERT INTO vendor_rules (workspace_id, keyword, vendor, category)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (workspace_id, keyword) DO UPDATE SET
                     vendor = EXCLUDED.vendor,
                     category = EXCLUDED.category
                 RETURNING
                     {VENDOR_RULE_COLUMNS}
                 """,
+                self.workspace_id,
                 keyword,
                 vendor,
                 category,
@@ -60,11 +64,12 @@ class VendorRuleRepository:
         async with self.database_pool.acquire() as connection:
             return await connection.fetchrow(
                 f"""
-                INSERT INTO vendor_rules (keyword, vendor, category)
-                VALUES ($1, $2, $3)
+                INSERT INTO vendor_rules (workspace_id, keyword, vendor, category)
+                VALUES ($1, $2, $3, $4)
                 RETURNING
                     {VENDOR_RULE_COLUMNS}
                 """,
+                self.workspace_id,
                 keyword,
                 vendor,
                 category,
@@ -79,8 +84,10 @@ class VendorRuleRepository:
                     {VENDOR_RULE_COLUMNS}
                 FROM vendor_rules
                 WHERE id = $1
+                  AND workspace_id = $2
                 """,
                 rule_id,
+                self.workspace_id,
             )
 
     # Update the editable columns of a rule. Raises asyncpg.UniqueViolationError
@@ -97,14 +104,15 @@ class VendorRuleRepository:
             values.append(value)
             set_clauses.append(f"{column} = ${len(values)}")
 
-        values.append(rule_id)
+        values.extend([rule_id, self.workspace_id])
 
         async with self.database_pool.acquire() as connection:
             return await connection.fetchrow(
                 f"""
                 UPDATE vendor_rules
                 SET {", ".join(set_clauses)}
-                WHERE id = ${len(values)}
+                WHERE id = ${len(values) - 1}
+                  AND workspace_id = ${len(values)}
                 RETURNING
                     {VENDOR_RULE_COLUMNS}
                 """,
@@ -115,7 +123,13 @@ class VendorRuleRepository:
     async def delete(self, rule_id: UUID) -> bool:
         async with self.database_pool.acquire() as connection:
             row = await connection.fetchrow(
-                "DELETE FROM vendor_rules WHERE id = $1 RETURNING id",
+                """
+                DELETE FROM vendor_rules
+                WHERE id = $1
+                  AND workspace_id = $2
+                RETURNING id
+                """,
                 rule_id,
+                self.workspace_id,
             )
         return row is not None

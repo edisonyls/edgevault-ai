@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
+from app.core.auth import CurrentWorkspaceDep
 from app.core.config import Settings, get_settings
 from app.core.database import DatabasePoolDep
 from app.repositories.assistant import AssistantRepository
@@ -16,12 +17,13 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 def get_assistant_service(
     database_pool: DatabasePoolDep,
     settings: Annotated[Settings, Depends(get_settings)],
+    workspace: CurrentWorkspaceDep,
 ) -> AssistantService:
     local_client = build_local_client(settings)
     fallback_client = build_fallback_client(settings)
 
     return AssistantService(
-        AssistantRepository(database_pool),
+        AssistantRepository(database_pool, workspace.id),
         local_parser=LLMIntentParser(local_client) if local_client else None,
         fallback_parser=LLMIntentParser(
             fallback_client) if fallback_client else None,

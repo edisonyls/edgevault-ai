@@ -24,6 +24,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 # Imported after sys.path is set so `app.*` resolves.
+from app.core.auth import OWNER_WORKSPACE_ID  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.services.eval.extractor import Extractor, RulesExtractor  # noqa: E402
 from app.services.eval.metrics import evaluate  # noqa: E402
@@ -38,6 +39,7 @@ from app.services.financial_extraction import (  # noqa: E402
 LABELLED_EXAMPLES_SQL = """
     SELECT fr.*, de.raw_text
     FROM financial_records fr
+    JOIN resume_uploads u ON u.id = fr.upload_id
     JOIN LATERAL (
         SELECT raw_text
         FROM document_extractions
@@ -48,18 +50,22 @@ LABELLED_EXAMPLES_SQL = """
         LIMIT 1
     ) de ON TRUE
     WHERE fr.extraction_method = 'manual'
+      AND u.workspace_id = $1
 """
 
 
 async def load_labelled_examples(
     connection: asyncpg.Connection,
 ) -> list[tuple[dict[str, object], str]]:
-    rows = await connection.fetch(LABELLED_EXAMPLES_SQL)
+    rows = await connection.fetch(LABELLED_EXAMPLES_SQL, OWNER_WORKSPACE_ID)
     return [(_record_snapshot(row), row["raw_text"]) for row in rows]
 
 
 async def load_vendor_rules(connection: asyncpg.Connection) -> list[VendorRule]:
-    rows = await connection.fetch("SELECT keyword, vendor, category FROM vendor_rules")
+    rows = await connection.fetch(
+        "SELECT keyword, vendor, category FROM vendor_rules WHERE workspace_id = $1",
+        OWNER_WORKSPACE_ID,
+    )
     return [(row["keyword"], row["vendor"], row["category"]) for row in rows]
 
 
@@ -86,7 +92,9 @@ async def print_online_report(connection: asyncpg.Connection) -> None:
         SELECT changed_fields
         FROM extraction_corrections
         WHERE extraction_method = 'rules_v1'
-        """
+          AND workspace_id = $1
+        """,
+        OWNER_WORKSPACE_ID,
     )
     print("\n=== Online correction rate (rules_v1 first-pass) ===")
     if not rows:

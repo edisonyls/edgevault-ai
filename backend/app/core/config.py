@@ -1,9 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
 from dotenv import find_dotenv
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "development", "staging", "production"]
@@ -54,13 +54,65 @@ class Settings(BaseSettings):
         default=None, validation_alias="DEEPSEEK_API_KEY"
     )
     assistant_fallback_timeout: float = 30.0
+    auth_owner_password: str | None = None
+    auth_demo_password: str | None = None
+    auth_session_secret: str | None = None
+    auth_session_cookie_name: str = "edgevault_session"
+    auth_session_ttl_seconds: int = 60 * 60 * 24 * 7
+    auth_cookie_secure: bool = False
+    auth_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
 
-    @field_validator("assistant_llm_enabled", "assistant_fallback_enabled", mode="before")
+    @field_validator(
+        "assistant_llm_enabled",
+        "assistant_fallback_enabled",
+        "auth_cookie_secure",
+        mode="before",
+    )
     @classmethod
     def _blank_is_disabled(cls, value: object) -> object:
         if isinstance(value, str) and value.strip() == "":
             return False
         return value
+
+    @field_validator("auth_cookie_samesite", mode="before")
+    @classmethod
+    def _blank_samesite_is_lax(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip() == "":
+            return "lax"
+        return value
+
+    @field_validator(
+        "auth_owner_password",
+        "auth_demo_password",
+        "auth_session_secret",
+        mode="before",
+    )
+    @classmethod
+    def _blank_is_none(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value
+
+    @model_validator(mode="after")
+    def _production_auth_secrets_required(self) -> Self:
+        if self.environment != "production":
+            return self
+
+        missing = [
+            name
+            for name, value in (
+                ("AUTH_OWNER_PASSWORD", self.auth_owner_password),
+                ("AUTH_DEMO_PASSWORD", self.auth_demo_password),
+                ("AUTH_SESSION_SECRET", self.auth_session_secret),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                f"Missing required production auth settings: {', '.join(missing)}."
+            )
+
+        return self
 
     model_config = SettingsConfigDict(
         env_file=find_dotenv(usecwd=True) or None,

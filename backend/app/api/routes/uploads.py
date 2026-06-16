@@ -12,6 +12,7 @@ from fastapi import (
     status,
 )
 
+from app.core.auth import CurrentWorkspaceDep
 from app.core.config import Settings, get_settings
 from app.core.database import DatabasePoolDep
 from app.repositories.document_embeddings import DocumentEmbeddingRepository
@@ -51,8 +52,15 @@ MAX_UPLOAD_LIST_LIMIT = 500
 type SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
-def get_upload_service(database_pool: DatabasePoolDep, settings: SettingsDep) -> UploadService:
-    return UploadService(UploadRepository(database_pool), settings.upload_storage_dir)
+def get_upload_service(
+    database_pool: DatabasePoolDep,
+    settings: SettingsDep,
+    workspace: CurrentWorkspaceDep,
+) -> UploadService:
+    return UploadService(
+        UploadRepository(database_pool, workspace.id),
+        settings.upload_storage_dir,
+    )
 
 
 type UploadServiceDep = Annotated[UploadService, Depends(get_upload_service)]
@@ -63,10 +71,13 @@ def get_ocr_engine(settings: SettingsDep) -> OcrEngine:
     return TesseractEngine(language=settings.ocr_language)
 
 
-def get_financial_record_service(database_pool: DatabasePoolDep) -> FinancialRecordService:
+def get_financial_record_service(
+    database_pool: DatabasePoolDep,
+    workspace: CurrentWorkspaceDep,
+) -> FinancialRecordService:
     return FinancialRecordService(
-        FinancialRecordRepository(database_pool),
-        VendorRuleRepository(database_pool),
+        FinancialRecordRepository(database_pool, workspace.id),
+        VendorRuleRepository(database_pool, workspace.id),
         ExtractionCorrectionRepository(database_pool),
     )
 
@@ -80,13 +91,15 @@ type FinancialRecordServiceDep = Annotated[
 def get_document_extraction_service(
     database_pool: DatabasePoolDep,
     settings: SettingsDep,
+    workspace: CurrentWorkspaceDep,
     engine: Annotated[OcrEngine, Depends(get_ocr_engine)],
     financial_record_service: FinancialRecordServiceDep,
 ) -> DocumentExtractionService:
     embedding_service: EmbeddingService | None = None
     if settings.embeddings_enabled:
         embedding_service = EmbeddingService(
-            repository=DocumentEmbeddingRepository(database_pool),
+            repository=DocumentEmbeddingRepository(
+                database_pool, workspace.id),
             model=get_embedding_model(settings),
             chunk_size=settings.embedding_chunk_size,
             chunk_overlap=settings.embedding_chunk_overlap,
@@ -94,7 +107,7 @@ def get_document_extraction_service(
 
     return DocumentExtractionService(
         extraction_repository=DocumentExtractionRepository(database_pool),
-        upload_repository=UploadRepository(database_pool),
+        upload_repository=UploadRepository(database_pool, workspace.id),
         financial_record_service=financial_record_service,
         engine=engine,
         pdf_text_threshold=settings.ocr_pdf_text_threshold,

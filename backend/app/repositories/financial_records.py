@@ -21,10 +21,28 @@ FINANCIAL_RECORD_RETURNING_COLUMNS = """
     updated_at
 """
 
+FINANCIAL_RECORD_SELECT_COLUMNS = """
+    f.id,
+    f.upload_id,
+    f.document_type,
+    f.vendor,
+    f.transaction_date,
+    f.due_date,
+    f.total_amount,
+    f.currency,
+    f.category,
+    f.payment_status,
+    f.extraction_method,
+    f.confidence,
+    f.created_at,
+    f.updated_at
+"""
+
 
 class FinancialRecordRepository:
-    def __init__(self, database_pool: Pool) -> None:
+    def __init__(self, database_pool: Pool, workspace_id: UUID) -> None:
         self.database_pool = database_pool
+        self.workspace_id = workspace_id
 
     # Upsert a financial record based on extraction results, keyed by upload_id.
     # If a record with the same upload_id already exists, update it only if the
@@ -60,7 +78,13 @@ class FinancialRecordRepository:
                     extraction_method,
                     confidence
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM resume_uploads
+                    WHERE id = $1
+                      AND workspace_id = $12
+                )
                 ON CONFLICT (upload_id) DO UPDATE SET
                     document_type = EXCLUDED.document_type,
                     vendor = EXCLUDED.vendor,
@@ -73,6 +97,12 @@ class FinancialRecordRepository:
                     extraction_method = EXCLUDED.extraction_method,
                     confidence = EXCLUDED.confidence
                 WHERE financial_records.extraction_method <> 'manual'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM resume_uploads
+                    WHERE id = financial_records.upload_id
+                      AND workspace_id = $12
+                  )
                 RETURNING
                     {FINANCIAL_RECORD_RETURNING_COLUMNS}
                 """,
@@ -87,6 +117,7 @@ class FinancialRecordRepository:
                 payment_status,
                 extraction_method,
                 confidence,
+                self.workspace_id,
             )
 
     # Get a financial record by upload_id.
@@ -95,11 +126,14 @@ class FinancialRecordRepository:
             return await connection.fetchrow(
                 f"""
                 SELECT
-                    {FINANCIAL_RECORD_RETURNING_COLUMNS}
-                FROM financial_records
-                WHERE upload_id = $1
+                    {FINANCIAL_RECORD_SELECT_COLUMNS}
+                FROM financial_records f
+                JOIN resume_uploads u ON u.id = f.upload_id
+                WHERE f.upload_id = $1
+                  AND u.workspace_id = $2
                 """,
                 upload_id,
+                self.workspace_id,
             )
 
     # Get a financial record by its ID.
@@ -108,11 +142,14 @@ class FinancialRecordRepository:
             return await connection.fetchrow(
                 f"""
                 SELECT
-                    {FINANCIAL_RECORD_RETURNING_COLUMNS}
-                FROM financial_records
-                WHERE id = $1
+                    {FINANCIAL_RECORD_SELECT_COLUMNS}
+                FROM financial_records f
+                JOIN resume_uploads u ON u.id = f.upload_id
+                WHERE f.id = $1
+                  AND u.workspace_id = $2
                 """,
                 record_id,
+                self.workspace_id,
             )
 
     # List financial records, optionally filtering by category, with pagination.
@@ -123,12 +160,12 @@ class FinancialRecordRepository:
         limit: int,
         offset: int,
     ) -> list[Record]:
-        values: list[object] = []
-        where_clause = ""
+        values: list[object] = [self.workspace_id]
+        where = ["u.workspace_id = $1"]
 
         if category is not None:
             values.append(category)
-            where_clause = "WHERE category = $1"
+            where.append(f"f.category = ${len(values)}")
 
         values.extend([limit, offset])
         limit_placeholder = f"${len(values) - 1}"
@@ -138,10 +175,11 @@ class FinancialRecordRepository:
             return await connection.fetch(
                 f"""
                 SELECT
-                    {FINANCIAL_RECORD_RETURNING_COLUMNS}
-                FROM financial_records
-                {where_clause}
-                ORDER BY created_at DESC, id DESC
+                    {FINANCIAL_RECORD_SELECT_COLUMNS}
+                FROM financial_records f
+                JOIN resume_uploads u ON u.id = f.upload_id
+                WHERE {" AND ".join(where)}
+                ORDER BY f.created_at DESC, f.id DESC
                 LIMIT {limit_placeholder}
                 OFFSET {offset_placeholder}
                 """,
@@ -161,16 +199,32 @@ class FinancialRecordRepository:
             values.append(value)
             set_clauses.append(f"{column} = ${len(values)}")
 
-        values.append(record_id)
+        values.extend([record_id, self.workspace_id])
 
         async with self.database_pool.acquire() as connection:
             return await connection.fetchrow(
                 f"""
-                UPDATE financial_records
+                UPDATE financial_records AS f
                 SET {", ".join(set_clauses)}
-                WHERE id = ${len(values)}
+                FROM resume_uploads AS u
+                WHERE f.id = ${len(values) - 1}
+                  AND u.id = f.upload_id
+                  AND u.workspace_id = ${len(values)}
                 RETURNING
-                    {FINANCIAL_RECORD_RETURNING_COLUMNS}
+                    f.id,
+                    f.upload_id,
+                    f.document_type,
+                    f.vendor,
+                    f.transaction_date,
+                    f.due_date,
+                    f.total_amount,
+                    f.currency,
+                    f.category,
+                    f.payment_status,
+                    f.extraction_method,
+                    f.confidence,
+                    f.created_at,
+                    f.updated_at
                 """,
                 *values,
             )

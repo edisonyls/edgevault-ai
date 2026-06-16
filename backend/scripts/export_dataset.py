@@ -19,6 +19,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+from app.core.auth import OWNER_WORKSPACE_ID  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.services.financial_extraction import _record_snapshot  # noqa: E402
 
@@ -27,6 +28,7 @@ DEFAULT_OUTPUT = BACKEND_ROOT / "var" / "datasets" / "extraction_dataset.jsonl"
 DATASET_SQL = """
     SELECT fr.upload_id, fr.*, de.raw_text
     FROM financial_records fr
+    JOIN resume_uploads u ON u.id = fr.upload_id
     JOIN LATERAL (
         SELECT raw_text
         FROM document_extractions
@@ -37,6 +39,7 @@ DATASET_SQL = """
         LIMIT 1
     ) de ON TRUE
     WHERE fr.extraction_method = 'manual'
+      AND u.workspace_id = $1
     ORDER BY fr.created_at ASC
 """
 
@@ -48,7 +51,7 @@ async def main() -> None:
     settings = get_settings()
     connection = await asyncpg.connect(dsn=settings.database_url)
     try:
-        rows = await connection.fetch(DATASET_SQL)
+        rows = await connection.fetch(DATASET_SQL, OWNER_WORKSPACE_ID)
     finally:
         await connection.close()
 
