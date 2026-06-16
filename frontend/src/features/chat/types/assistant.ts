@@ -5,6 +5,9 @@ import type { FinancialCategory } from "@/features/documents/types/financial-rec
 export type AssistantQueryType =
   | "top_spending_category"
   | "category_total"
+  | "vendor_total"
+  | "vendor_list"
+  | "document_count"
   | "unpaid_bills"
   | "subscriptions"
   | "spending_summary"

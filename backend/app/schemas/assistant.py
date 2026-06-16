@@ -10,6 +10,9 @@ from pydantic import BaseModel, Field, field_validator
 AssistantQueryType = Literal[
     "top_spending_category",
     "category_total",
+    "vendor_total",
+    "vendor_list",
+    "document_count",
     "unpaid_bills",
     "subscriptions",
     "spending_summary",

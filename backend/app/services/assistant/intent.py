@@ -28,6 +28,7 @@ CATEGORY_KEYWORDS: list[tuple[str, str]] = [
     ("utilities", "utilities"),
     ("electricity", "utilities"),
     ("power bill", "utilities"),
+    ("energy", "utilities"),
     ("gas", "utilities"),
     ("water", "utilities"),
     ("internet", "internet_phone"),
@@ -78,6 +79,7 @@ ALL_TIME = "all time"
 class Intent:
     query_type: AssistantQueryType
     category: str | None = None
+    vendor: str | None = None
     date_from: date | None = None
     date_to: date | None = None
     period_label: str = ALL_TIME
@@ -97,9 +99,19 @@ def _infer_year(month: int, today: date, prefer_future: bool) -> int:
     return today.year if month <= today.month else today.year - 1
 
 
+# "not unpaid" / "nothing overdue" etc. — a negated bill question shouldn't be
+# treated as a request for outstanding bills.
+_NEGATED_UNPAID_RE = re.compile(
+    r"\b(?:not|never|aren't|isn't|don't|no)\b[^.?!]{0,20}"
+    r"\b(?:unpaid|overdue|outstanding|due|owe|owing)\b"
+)
+
+
 # "unpaid" / "due" / "owe" -> outstanding bills. Also drives forward-looking
 # month inference, since these questions are about upcoming due dates.
 def _is_unpaid(lowered: str) -> bool:
+    if _NEGATED_UNPAID_RE.search(lowered):
+        return False
     return any(word in lowered for word in ("unpaid", "overdue", "outstanding")) or bool(
         re.search(r"\b(due|owe|owing)\b", lowered)
     )
@@ -142,7 +154,9 @@ def _parse_period(
     return None, None, ALL_TIME
 
 
-def _match_category(lowered: str) -> str | None:
+def match_category(lowered: str) -> str | None:
+    """The fixed-taxonomy category named in the question, if any. The first
+    keyword found wins. Shared with the LLM tier to validate its category."""
     best: tuple[int, str] | None = None
     for keyword, category in CATEGORY_KEYWORDS:
         match = re.search(rf"\b{re.escape(keyword)}\b", lowered)
@@ -157,6 +171,41 @@ def _wants_top(lowered: str) -> bool:
                    "expense", "expenses", "cost", "costs")
     return any(word in lowered for word in superlatives) and any(
         word in lowered for word in spend_terms
+    )
+
+
+# "vendors" / "merchants" / "who do I pay" -> list the businesses on record.
+_VENDOR_LIST_RE = re.compile(
+    r"\b(?:vendors?|merchants?|payees?|suppliers?)\b|\bwho (?:do|am) i pay(?:ing)?\b"
+)
+
+# "how many invoices / documents / receipts do I have" -> a document count.
+# Deliberately excludes "bills" so unpaid-bill questions still route to unpaid.
+_DOC_COUNT_RE = re.compile(
+    r"\b(?:how many|number of|count of)\b.*"
+    r"\b(?:documents?|invoices?|receipts?|records?|uploads?|files?|statements?)\b"
+)
+
+# Generic spend words that, absent a specific category, mean "all spending".
+_SPEND_TERMS = (
+    "spend", "spent", "spending", "cost", "costs",
+    "expense", "expenses", "paid", "pay",
+)
+_TOTAL_TERMS = ("total", "overall", "altogether", "in all")
+
+
+def _wants_vendor_list(lowered: str) -> bool:
+    return bool(_VENDOR_LIST_RE.search(lowered))
+
+
+def _wants_document_count(lowered: str) -> bool:
+    return bool(_DOC_COUNT_RE.search(lowered))
+
+
+def _wants_spend_overview(lowered: str) -> bool:
+    """A general 'how much / total / overall spending' question, no category named."""
+    return any(term in lowered for term in _SPEND_TERMS) or any(
+        term in lowered for term in _TOTAL_TERMS
     )
 
 
@@ -186,6 +235,26 @@ def build_intent(
     )
 
 
+def build_vendor_intent(question: str, vendor: str, today: date | None = None) -> Intent:
+    """
+    Assemble an intent scoped to a single named vendor, honouring any period and
+    "unpaid"/"owe" framing in the question. Used when the service layer matches a
+    vendor we hold records for, so vendor questions resolve deterministically.
+    """
+    today = today or date.today()
+    lowered = question.lower()
+    is_unpaid = _is_unpaid(lowered)
+    date_from, date_to, period_label = _parse_period(
+        lowered, today, prefer_future=is_unpaid)
+    return Intent(
+        query_type="unpaid_bills" if is_unpaid else "vendor_total",
+        vendor=vendor,
+        date_from=date_from,
+        date_to=date_to,
+        period_label=period_label,
+    )
+
+
 def parse_intent(question: str, today: date | None = None) -> Intent:
     """Map a question to a structured intent. Order encodes precedence."""
     today = today or date.today()
@@ -202,6 +271,15 @@ def parse_intent(question: str, today: date | None = None) -> Intent:
             date_to=date_to,
             period_label=period_label,
         )
+
+    # "vendors" / "merchants" / "who do I pay" -> list the businesses on record.
+    # Checked first so "not unpaid bills, but vendors" lands here, not on unpaid.
+    if _wants_vendor_list(lowered):
+        return intent("vendor_list")
+
+    # "how many invoices / documents do I have" -> a document count.
+    if _wants_document_count(lowered):
+        return intent("document_count")
 
     # "unpaid" / "due" / "owe" -> outstanding bills.
     if is_unpaid:
@@ -223,8 +301,13 @@ def parse_intent(question: str, today: date | None = None) -> Intent:
         return intent("top_spending_category")
 
     # a category keyword (optionally with a month) -> that category's total.
-    category = _match_category(lowered)
+    category = match_category(lowered)
     if category is not None:
         return intent("category_total", category=category)
+
+    # a plain "how much did I spend" / "total spending" with no category named
+    # -> a whole-of-spending breakdown, rather than punting to the LLM.
+    if _wants_spend_overview(lowered):
+        return intent("spending_summary")
 
     return intent("unknown")

@@ -1,4 +1,5 @@
 import logging
+import re
 from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
@@ -10,7 +11,12 @@ from app.schemas.assistant import (
     AssistantQueryResponse,
     SupportingRecord,
 )
-from app.services.assistant.intent import ALL_TIME, Intent, parse_intent
+from app.services.assistant.intent import (
+    ALL_TIME,
+    Intent,
+    build_vendor_intent,
+    parse_intent,
+)
 from app.services.assistant.llm_intent import LLMIntentParser
 
 logger = logging.getLogger(__name__)
@@ -19,6 +25,12 @@ logger = logging.getLogger(__name__)
 EVIDENCE_LIMIT = 10
 # How many categories to name in a spending summary.
 SUMMARY_TOP_CATEGORIES = 3
+# Shortest vendor-name token we'll match on its own to avoid latching onto short, common words.
+MIN_VENDOR_TOKEN = 5
+# Vendor-name tokens that are ordinary English words
+_GENERIC_VENDOR_TOKENS = {
+    "energy", "circle", "group", "store", "shop", "company", "services", "solutions",
+}
 
 # Friendlier labels for the fixed category taxonomy when shown in answer text.
 CATEGORY_DISPLAY: dict[str, str] = {
@@ -132,6 +144,11 @@ class AssistantService:
         place the question. The first tier to return a usable intent wins.
         """
         intent = parse_intent(question, today)
+
+        vendor = await self._match_known_vendor(question)
+        if vendor is not None:
+            return build_vendor_intent(question, vendor, today), "rules"
+
         if intent.query_type != "unknown":
             return intent, "rules"
 
@@ -153,10 +170,38 @@ class AssistantService:
 
         return intent, "rules"
 
+    async def _match_known_vendor(self, question: str) -> str | None:
+        """
+        Return the canonical name of a vendor mentioned in the question, matched
+        against the vendors actually on record. Prefers a full-name hit; falls
+        back to a distinctive single token (e.g. "anthropic", "chargefox").
+        """
+        rows = await self.repository.list_vendors()
+        names = [row["vendor"] for row in rows if row["vendor"]]
+        if not names:
+            return None
+        lowered = question.lower()
+
+        # Longest full names first so "Origin Energy" wins over a stray "energy".
+        for name in sorted(names, key=len, reverse=True):
+            if re.search(rf"\b{re.escape(name.lower())}\b", lowered):
+                return name
+
+        for name in names:
+            for token in re.findall(r"[a-z0-9]+", name.lower()):
+                if len(token) < MIN_VENDOR_TOKEN or token in _GENERIC_VENDOR_TOKENS:
+                    continue
+                if re.search(rf"\b{re.escape(token)}\b", lowered):
+                    return name
+        return None
+
     async def _dispatch(self, intent: Intent) -> tuple[str, list[SupportingRecord]]:
         handlers = {
             "top_spending_category": self._top_spending_category,
             "category_total": self._category_total,
+            "vendor_total": self._vendor_total,
+            "vendor_list": self._vendor_list,
+            "document_count": self._document_count,
             "unpaid_bills": self._unpaid_bills,
             "subscriptions": self._subscriptions,
             "spending_summary": self._spending_summary,
@@ -211,18 +256,20 @@ class AssistantService:
 
     async def _unpaid_bills(self, intent: Intent) -> tuple[str, list[SupportingRecord]]:
         aggregate = await self.repository.unpaid_aggregate(
-            date_from=intent.date_from, date_to=intent.date_to
+            date_from=intent.date_from, date_to=intent.date_to, vendor=intent.vendor
         )
         count = aggregate["count"]
         # Period filters apply to the due date, so phrase it as "due …".
         due_phrase = (
             f" due {_period_phrase(intent.period_label)}" if intent.period_label != ALL_TIME else ""
         )
+        vendor_phrase = f" to {intent.vendor}" if intent.vendor else ""
         if count == 0:
-            return f"You don't have any unpaid bills{due_phrase}.", []
+            return f"You don't have any unpaid bills{vendor_phrase}{due_phrase}.", []
 
         records = await self.repository.records(
             payment_status="unpaid",
+            vendor=intent.vendor,
             date_from=intent.date_from,
             date_to=intent.date_to,
             date_column="due_date",
@@ -230,10 +277,70 @@ class AssistantService:
             order="due",
             limit=EVIDENCE_LIMIT,
         )
-        answer = f"You have {count} unpaid {_plural('bill', count)}{due_phrase}"
+        answer = f"You have {count} unpaid {_plural('bill', count)}{vendor_phrase}{due_phrase}"
         if aggregate["total"]:
             answer += f" totalling {_money(aggregate['total'])}"
         answer += "."
+        return answer, _to_supporting(records)
+
+    async def _vendor_total(self, intent: Intent) -> tuple[str, list[SupportingRecord]]:
+        vendor = intent.vendor
+        assert vendor is not None  # vendor_total is only produced with a vendor
+        aggregate = await self.repository.vendor_aggregate(
+            vendor=vendor, date_from=intent.date_from, date_to=intent.date_to
+        )
+        count = aggregate["count"]
+        if count == 0:
+            return f"I couldn't find any spending for {vendor}{_suffix(intent.period_label)}.", []
+
+        records = await self.repository.records(
+            vendor=vendor,
+            date_from=intent.date_from,
+            date_to=intent.date_to,
+            order="amount",
+            limit=EVIDENCE_LIMIT,
+        )
+        answer = (
+            f"You spent {_money(aggregate['total'])} at {vendor}"
+            f"{_suffix(intent.period_label)}, across {count} {_plural('record', count)}."
+        )
+        return answer, _to_supporting(records)
+
+    async def _vendor_list(self, intent: Intent) -> tuple[str, list[SupportingRecord]]:
+        vendors = await self.repository.list_vendors()
+        if not vendors:
+            return "I couldn't find any vendors in your documents.", []
+
+        names = [row["vendor"] for row in vendors]
+        records = await self.repository.records(
+            require_amount=False, order="date", limit=EVIDENCE_LIMIT
+        )
+        answer = (
+            f"You have {len(names)} {_plural('vendor', len(names))}: "
+            f"{_humanize_list(names)}."
+        )
+        return answer, _to_supporting(records)
+
+    async def _document_count(self, intent: Intent) -> tuple[str, list[SupportingRecord]]:
+        counts = await self.repository.document_count(
+            date_from=intent.date_from, date_to=intent.date_to
+        )
+        documents = counts["documents"]
+        record_count = counts["records"]
+        if record_count == 0:
+            return f"I couldn't find any documents{_suffix(intent.period_label)}.", []
+
+        records = await self.repository.records(
+            date_from=intent.date_from,
+            date_to=intent.date_to,
+            require_amount=False,
+            order="date",
+            limit=EVIDENCE_LIMIT,
+        )
+        answer = (
+            f"You have {documents} {_plural('document', documents)}{_suffix(intent.period_label)} "
+            f"with {record_count} financial {_plural('record', record_count)}."
+        )
         return answer, _to_supporting(records)
 
     async def _subscriptions(self, intent: Intent) -> tuple[str, list[SupportingRecord]]:
