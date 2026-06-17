@@ -12,6 +12,7 @@ Two complementary views:
 Usage:
     uv run python scripts/eval_extraction.py            # rules_v1 (frozen baseline)
     uv run python scripts/eval_extraction.py rag         # RAG candidate vs Pi qwen
+    uv run python scripts/eval_extraction.py hybrid      # rules + LLM document_type override
 """
 
 import asyncio
@@ -32,6 +33,7 @@ from app.core.database import create_database_pool  # noqa: E402
 from app.services.assistant.llm_client import ChatCompletionClient  # noqa: E402
 from app.services.embeddings import get_embedding_model  # noqa: E402
 from app.services.eval.extractor import Extractor, RulesExtractor  # noqa: E402
+from app.services.eval.hybrid_extractor import HybridExtractor  # noqa: E402
 from app.services.eval.metrics import evaluate  # noqa: E402
 from app.services.eval.rag_extractor import LabelledExample, RagExtractor  # noqa: E402
 from app.services.financial_extraction import (  # noqa: E402
@@ -179,31 +181,56 @@ async def run_rules_report(
     await print_offline_report(RulesExtractor(rules), examples)
 
 
-async def run_rag_report(
+async def _build_rag_extractor(
     connection: asyncpg.Connection,
-    examples: list[tuple[dict, str]],
     settings,  # noqa: ANN001 - Settings, imported lazily to keep the rules path clean
-) -> None:
+    pool: asyncpg.Pool,
+) -> tuple[RagExtractor, list[VendorRule]]:
+    """Build the RAG extractor on a (vector-codec-aware) pool. Returns the vendor
+    rules too, so the hybrid can reuse them for its rules base."""
     corpus = await load_corpus(connection)
     vendor_rules = await load_vendor_rules(connection)
-    model = get_embedding_model(settings)
     llm = ChatCompletionClient(
         base_url=settings.assistant_llm_base_url,
         model=settings.assistant_llm_model,
         timeout=RAG_LLM_TIMEOUT,
         extra_params=RAG_LLM_EXTRA_PARAMS,
     )
-    # A vector-codec-aware pool so the query embedding encodes for `<=>`.
+    rag = RagExtractor(
+        examples=corpus,
+        pool=pool,
+        model=get_embedding_model(settings),
+        llm=llm,
+        vendor_rules=vendor_rules,
+        top_k=RAG_TOP_K,
+    )
+    return rag, vendor_rules
+
+
+async def run_rag_report(
+    connection: asyncpg.Connection,
+    examples: list[tuple[dict, str]],
+    settings,  # noqa: ANN001
+) -> None:
     pool = await create_database_pool(settings)
     try:
-        extractor = RagExtractor(
-            examples=corpus,
-            pool=pool,
-            model=model,
-            llm=llm,
-            vendor_rules=vendor_rules,
-            top_k=RAG_TOP_K,
-        )
+        rag, _ = await _build_rag_extractor(connection, settings, pool)
+        await print_offline_report(rag, examples)
+    finally:
+        await pool.close()
+
+
+async def run_hybrid_report(
+    connection: asyncpg.Connection,
+    examples: list[tuple[dict, str]],
+    settings,  # noqa: ANN001
+) -> None:
+    """Rules baseline with document_type overridden by the LLM — the first config
+    with a real shot at beating rules (see docs/eval_baseline.md)."""
+    pool = await create_database_pool(settings)
+    try:
+        rag, vendor_rules = await _build_rag_extractor(connection, settings, pool)
+        extractor = HybridExtractor(rules=RulesExtractor(vendor_rules), rag=rag)
         await print_offline_report(extractor, examples)
     finally:
         await pool.close()
@@ -211,8 +238,8 @@ async def run_rag_report(
 
 async def main() -> None:
     mode = sys.argv[1].lower() if len(sys.argv) > 1 else "rules"
-    if mode not in {"rules", "rag"}:
-        print(f"unknown extractor '{mode}' — use 'rules' (default) or 'rag'")
+    if mode not in {"rules", "rag", "hybrid"}:
+        print(f"unknown extractor '{mode}' — use 'rules' (default), 'rag', or 'hybrid'")
         return
 
     settings = get_settings()
@@ -225,6 +252,8 @@ async def main() -> None:
             print("no manually corrected documents yet — nothing to score")
         elif mode == "rag":
             await run_rag_report(connection, examples, settings)
+        elif mode == "hybrid":
+            await run_hybrid_report(connection, examples, settings)
         else:
             await run_rules_report(connection, examples)
 
