@@ -28,11 +28,22 @@ PAYMENT_STATUSES = frozenset({"paid", "unpaid", "unknown"})
 
 # Keep the prompt lean: the Pi runs a 1.5B model with a small context window, so
 # cap how much OCR text each demonstration and the query contribute.
-MAX_DEMO_CHARS = 700
-MAX_QUERY_CHARS = 900
+MAX_DEMO_CHARS = 800
+MAX_QUERY_CHARS = 1100
 
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# Lenient date fallbacks for when the model ignores "output YYYY-MM-DD".
+_NUMERIC_DMY_RE = re.compile(r"^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$")
+_NUMERIC_YMD_RE = re.compile(r"^(\d{4})[/.\-](\d{1,2})[/.\-](\d{1,2})$")
+_DAY_MONTH_YEAR_RE = re.compile(
+    r"^(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{2,4})$")
+_MONTH_DAY_YEAR_RE = re.compile(
+    r"^([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{2,4})$")
+_MONTHS = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
 
 SYSTEM_PROMPT = """Extract fields from a financial document's OCR text. \
 Output ONLY one JSON object, no prose, no code fences. Use null for anything the \
@@ -47,7 +58,10 @@ document does not state; never guess. Keys and allowed values:
  "payment_status": "paid"|"unpaid"|"unknown"|null}
 total_amount is the final grand total. utilities=electricity/gas/water; \
 internet_phone=internet/mobile/phone; transport=fuel/rideshare/transit/parking. \
-The worked examples that follow are from this same workspace."""
+Dates are Australian: read ambiguous numeric dates as day/month/year (e.g. \
+07/06/2026 is 7 June 2026), and output every date as YYYY-MM-DD. \
+The vendor directory and worked examples below are from this same workspace; when \
+a document matches a directory vendor, reuse that exact vendor name and category."""
 
 
 @dataclass(slots=True)
@@ -85,7 +99,8 @@ class RagExtractor:
         pool: Pool,
         model: EmbeddingModel,
         llm: ChatCompletionClient,
-        top_k: int = 3,
+        vendor_rules: Sequence[tuple[str, str, str]] = (),
+        top_k: int = 4,
     ) -> None:
         self._examples = list(examples)
         self._pool = pool
@@ -96,6 +111,7 @@ class RagExtractor:
         # Identical OCR text -> upload_id, so we can find (and exclude) the query
         # document in the corpus during leave-one-out retrieval.
         self._upload_by_text = {ex.text: ex.upload_id for ex in self._examples}
+        self._system = _system_prompt_with_directory(vendor_rules)
 
     # Sync entry point for Protocol conformance / standalone use. The eval
     # harness prefers extract_async; this only runs when no loop is active.
@@ -157,7 +173,7 @@ class RagExtractor:
                 blocks) + f"\n\nNow extract this document:\n{query}\n\nAnswer:"
         else:
             user = f"Extract this document:\n{query}\n\nAnswer:"
-        return SYSTEM_PROMPT, user
+        return self._system, user
 
     def _coerce_snapshot(self, parsed: dict[str, object]) -> dict[str, object]:
         return {
@@ -188,6 +204,25 @@ def _extract_json(text: str) -> dict[str, object] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def _system_prompt_with_directory(
+    vendor_rules: Sequence[tuple[str, str, str]],
+) -> str:
+    """Append the workspace's vendor->category directory to the system prompt, so
+    the model has the same lookup the rules engine uses (keyword -> canonical
+    vendor name + category) instead of inferring both from neighbours."""
+    if not vendor_rules:
+        return SYSTEM_PROMPT
+
+    grouped: dict[tuple[str, str], list[str]] = {}
+    for keyword, vendor, category in vendor_rules:
+        grouped.setdefault((vendor, category), []).append(keyword)
+
+    lines = ["Vendor directory — name [category] — mentions:"]
+    for (vendor, category), keywords in grouped.items():
+        lines.append(f"- {vendor} [{category}] — {', '.join(keywords)}")
+    return SYSTEM_PROMPT + "\n\n" + "\n".join(lines)
+
+
 def _ordered(target: dict[str, object]) -> dict[str, object]:
     """Render a demonstration answer with keys in the canonical field order."""
     return {field: target.get(field) for field in SNAPSHOT_FIELDS}
@@ -212,17 +247,52 @@ def _enum(value: object, allowed: frozenset[str]) -> str | None:
     return text if text in allowed else None
 
 
+def _safe_iso(year: int, month: int, day: int) -> str | None:
+    if year < 100:
+        year += 2000
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return None
+
+
 def _iso_date(value: object) -> str | None:
+    """Normalise a date value to ISO. The model is told to emit YYYY-MM-DD, but
+    small models drift to day-first numeric or month-name forms; reparse those
+    (Australian day-first for ambiguous numerics) rather than scoring them wrong."""
     if value is None:
         return None
     text = str(value).strip()
-    if not _ISO_DATE_RE.match(text):
+    if not text:
         return None
-    try:
-        date.fromisoformat(text)
-    except ValueError:
-        return None
-    return text
+
+    if _ISO_DATE_RE.match(text):
+        try:
+            return date.fromisoformat(text).isoformat()
+        except ValueError:
+            return None
+
+    match = _NUMERIC_YMD_RE.match(text)
+    if match:
+        return _safe_iso(int(match[1]), int(match[2]), int(match[3]))
+
+    match = _NUMERIC_DMY_RE.match(text)
+    if match:  # day-first
+        return _safe_iso(int(match[3]), int(match[2]), int(match[1]))
+
+    match = _DAY_MONTH_YEAR_RE.match(text)
+    if match:
+        month = _MONTHS.get(match[2][:3].lower())
+        if month:
+            return _safe_iso(int(match[3]), month, int(match[1]))
+
+    match = _MONTH_DAY_YEAR_RE.match(text)
+    if match:
+        month = _MONTHS.get(match[1][:3].lower())
+        if month:
+            return _safe_iso(int(match[3]), month, int(match[2]))
+
+    return None
 
 
 def _amount(value: object) -> str | None:

@@ -43,7 +43,7 @@ from app.services.financial_extraction import (  # noqa: E402
 # RAG extraction prompts are larger than intent prompts and the Pi is slow, so
 # give the local model more room than the assistant's default timeout.
 RAG_LLM_TIMEOUT = 120.0
-RAG_TOP_K = 2
+RAG_TOP_K = 4
 RAG_LLM_EXTRA_PARAMS: dict[str, object] = {
     "temperature": 0,
     "max_tokens": 256,
@@ -185,6 +185,7 @@ async def run_rag_report(
     settings,  # noqa: ANN001 - Settings, imported lazily to keep the rules path clean
 ) -> None:
     corpus = await load_corpus(connection)
+    vendor_rules = await load_vendor_rules(connection)
     model = get_embedding_model(settings)
     llm = ChatCompletionClient(
         base_url=settings.assistant_llm_base_url,
@@ -196,7 +197,12 @@ async def run_rag_report(
     pool = await create_database_pool(settings)
     try:
         extractor = RagExtractor(
-            examples=corpus, pool=pool, model=model, llm=llm, top_k=RAG_TOP_K
+            examples=corpus,
+            pool=pool,
+            model=model,
+            llm=llm,
+            vendor_rules=vendor_rules,
+            top_k=RAG_TOP_K,
         )
         await print_offline_report(extractor, examples)
     finally:
