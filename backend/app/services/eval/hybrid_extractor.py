@@ -14,12 +14,19 @@ of override fields.
 
 import asyncio
 from collections.abc import Sequence
+from typing import Protocol
 
 from app.services.eval.extractor import RulesExtractor
-from app.services.eval.rag_extractor import RagExtractor
 
 # Fields where the LLM beat rules in the bake-off; everything else stays on rules.
 DEFAULT_OVERRIDE_FIELDS = ("document_type",)
+
+
+class FieldSource(Protocol):
+    """Anything that can produce field values for the override (the full RAG
+    extractor, or a focused single-field classifier)."""
+
+    async def extract_async(self, text: str) -> dict[str, object]: ...
 
 
 class HybridExtractor:
@@ -31,11 +38,11 @@ class HybridExtractor:
         self,
         *,
         rules: RulesExtractor,
-        rag: RagExtractor,
+        source: FieldSource,
         override_fields: Sequence[str] = DEFAULT_OVERRIDE_FIELDS,
     ) -> None:
         self._rules = rules
-        self._rag = rag
+        self._source = source
         self._override_fields = tuple(override_fields)
 
     # Sync entry point for Protocol conformance; the eval harness uses the async one.
@@ -45,7 +52,7 @@ class HybridExtractor:
     async def extract_async(self, text: str) -> dict[str, object]:
         # Rules produce a fresh dict per call, so mutating it here is safe.
         snapshot = self._rules.extract(text)
-        predicted = await self._rag.extract_async(text)
+        predicted = await self._source.extract_async(text)
         for field in self._override_fields:
             value = predicted.get(field)
             if value is not None:

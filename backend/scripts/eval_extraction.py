@@ -32,6 +32,7 @@ from app.core.config import get_settings  # noqa: E402
 from app.core.database import create_database_pool  # noqa: E402
 from app.services.assistant.llm_client import ChatCompletionClient  # noqa: E402
 from app.services.embeddings import get_embedding_model  # noqa: E402
+from app.services.eval.doctype_classifier import DocumentTypeClassifier  # noqa: E402
 from app.services.eval.extractor import Extractor, RulesExtractor  # noqa: E402
 from app.services.eval.hybrid_extractor import HybridExtractor  # noqa: E402
 from app.services.eval.metrics import evaluate  # noqa: E402
@@ -181,21 +182,25 @@ async def run_rules_report(
     await print_offline_report(RulesExtractor(rules), examples)
 
 
-async def _build_rag_extractor(
-    connection: asyncpg.Connection,
-    settings,  # noqa: ANN001 - Settings, imported lazily to keep the rules path clean
-    pool: asyncpg.Pool,
-) -> tuple[RagExtractor, list[VendorRule]]:
-    """Build the RAG extractor on a (vector-codec-aware) pool. Returns the vendor
-    rules too, so the hybrid can reuse them for its rules base."""
-    corpus = await load_corpus(connection)
-    vendor_rules = await load_vendor_rules(connection)
-    llm = ChatCompletionClient(
+def _build_llm(settings) -> ChatCompletionClient:  # noqa: ANN001
+    return ChatCompletionClient(
         base_url=settings.assistant_llm_base_url,
         model=settings.assistant_llm_model,
         timeout=RAG_LLM_TIMEOUT,
         extra_params=RAG_LLM_EXTRA_PARAMS,
     )
+
+
+async def _build_rag_extractor(
+    connection: asyncpg.Connection,
+    settings,  # noqa: ANN001 - Settings, imported lazily to keep the rules path clean
+    pool: asyncpg.Pool,
+    llm: ChatCompletionClient,
+) -> tuple[RagExtractor, list[VendorRule]]:
+    """Build the RAG extractor on a (vector-codec-aware) pool. Returns the vendor
+    rules too, so the hybrid can reuse them for its rules base."""
+    corpus = await load_corpus(connection)
+    vendor_rules = await load_vendor_rules(connection)
     rag = RagExtractor(
         examples=corpus,
         pool=pool,
@@ -214,7 +219,7 @@ async def run_rag_report(
 ) -> None:
     pool = await create_database_pool(settings)
     try:
-        rag, _ = await _build_rag_extractor(connection, settings, pool)
+        rag, _ = await _build_rag_extractor(connection, settings, pool, _build_llm(settings))
         await print_offline_report(rag, examples)
     finally:
         await pool.close()
@@ -225,12 +230,16 @@ async def run_hybrid_report(
     examples: list[tuple[dict, str]],
     settings,  # noqa: ANN001
 ) -> None:
-    """Rules baseline with document_type overridden by the LLM — the first config
-    with a real shot at beating rules (see docs/eval_baseline.md)."""
+    """Rules baseline with document_type overridden by a focused LLM classifier —
+    the first config to beat rules (see docs/eval_baseline.md). The classifier
+    reuses the RAG extractor's retrieval for its few-shot type examples."""
     pool = await create_database_pool(settings)
     try:
-        rag, vendor_rules = await _build_rag_extractor(connection, settings, pool)
-        extractor = HybridExtractor(rules=RulesExtractor(vendor_rules), rag=rag)
+        llm = _build_llm(settings)
+        rag, vendor_rules = await _build_rag_extractor(connection, settings, pool, llm)
+        source = DocumentTypeClassifier(retriever=rag.retrieve, llm=llm)
+        extractor = HybridExtractor(
+            rules=RulesExtractor(vendor_rules), source=source)
         await print_offline_report(extractor, examples)
     finally:
         await pool.close()
@@ -239,7 +248,8 @@ async def run_hybrid_report(
 async def main() -> None:
     mode = sys.argv[1].lower() if len(sys.argv) > 1 else "rules"
     if mode not in {"rules", "rag", "hybrid"}:
-        print(f"unknown extractor '{mode}' — use 'rules' (default), 'rag', or 'hybrid'")
+        print(
+            f"unknown extractor '{mode}' — use 'rules' (default), 'rag', or 'hybrid'")
         return
 
     settings = get_settings()
