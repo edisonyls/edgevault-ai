@@ -93,6 +93,40 @@ async def main() -> None:
     async with httpx.AsyncClient(timeout=120.0) as client:
         await probe(client, url, base, "plain (no response_format)")
         await probe(client, url, json_mode, "json mode (response_format)")
+        await context_ladder(client, url, model)
+
+
+async def context_ladder(client: httpx.AsyncClient, url: str, model: str) -> None:
+    """Find the Hailo-compiled context ceiling: send increasingly long prompts
+    until the server stops returning 200. The RAG prompt must fit under whatever
+    this reports (minus the completion budget)."""
+    print("\n=== context ceiling ladder (find where 200 turns into 500) ===")
+    for chars in (1000, 2000, 3000, 4000, 5000, 6000, 8000):
+        filler = ("word " * ((chars // 5) + 1))[:chars]
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "Reply with the single word OK."},
+                {"role": "user", "content": f"{filler}\n\nReply OK."},
+            ],
+            "temperature": 0,
+            "max_tokens": 8,
+        }
+        start = time.monotonic()
+        try:
+            response = await client.post(url, json=payload)
+        except httpx.HTTPError as error:
+            print(f"~{chars:>5} chars (~{chars // 4:>4} tok): FAILED "
+                  f"{type(error).__name__}: {error!r}")
+            break
+        elapsed = time.monotonic() - start
+        status = response.status_code
+        print(
+            f"~{chars:>5} chars (~{chars // 4:>4} tok): status {status}  {elapsed:.1f}s")
+        if status != 200:
+            print(f"  >> ceiling is below ~{chars} chars (~{chars // 4} tokens). "
+                  f"body: {response.text[:200]}")
+            break
 
 
 if __name__ == "__main__":

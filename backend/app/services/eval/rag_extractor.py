@@ -26,10 +26,11 @@ CATEGORIES = frozenset(
 )
 PAYMENT_STATUSES = frozenset({"paid", "unpaid", "unknown"})
 
-# Keep the prompt lean: the Pi runs a 1.5B model with a small context window, so
-# cap how much OCR text each demonstration and the query contribute.
-MAX_DEMO_CHARS = 800
-MAX_QUERY_CHARS = 1100
+# Keep the prompt lean: the Hailo-compiled model has a small FIXED context window
+# and the vendor directory already spends part of that budget. Cap demo/query
+# text so 2 demos + directory fit.
+MAX_DEMO_CHARS = 600
+MAX_QUERY_CHARS = 800
 
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
