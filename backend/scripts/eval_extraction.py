@@ -43,12 +43,11 @@ from app.services.financial_extraction import (  # noqa: E402
 # RAG extraction prompts are larger than intent prompts and the Pi is slow, so
 # give the local model more room than the assistant's default timeout.
 RAG_LLM_TIMEOUT = 120.0
-# The Hailo-compiled model has a small fixed context window
 RAG_TOP_K = 2
+
 RAG_LLM_EXTRA_PARAMS: dict[str, object] = {
     "temperature": 0,
     "max_tokens": 200,
-    "response_format": {"type": "json_object"},
 }
 
 # Pull the latest succeeded OCR text for each upload that has a manually

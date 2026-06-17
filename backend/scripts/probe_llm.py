@@ -96,37 +96,53 @@ async def main() -> None:
         await context_ladder(client, url, model)
 
 
+def _receipt_filler(chars: int) -> str:
+    """Receipt-like filler (newlines, numbers, $) so the prompt resembles a real
+    RAG call rather than a wall of one repeated word."""
+    line = "Item {n} description here .... ${n}.50\n"
+    body = "".join(line.format(n=i) for i in range(1, chars // 36 + 2))
+    return f"STORE NAME PTY LTD\n{body[:chars]}\nTOTAL 123.45\n"
+
+
 async def context_ladder(client: httpx.AsyncClient, url: str, model: str) -> None:
-    """Find the Hailo-compiled context ceiling: send increasingly long prompts
-    until the server stops returning 200. The RAG prompt must fit under whatever
-    this reports (minus the completion budget)."""
-    print("\n=== context ceiling ladder (find where 200 turns into 500) ===")
-    for chars in (1000, 2000, 3000, 4000, 5000, 6000, 8000):
-        filler = ("word " * ((chars // 5) + 1))[:chars]
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": "Reply with the single word OK."},
-                {"role": "user", "content": f"{filler}\n\nReply OK."},
-            ],
-            "temperature": 0,
-            "max_tokens": 8,
-        }
-        start = time.monotonic()
-        try:
-            response = await client.post(url, json=payload)
-        except httpx.HTTPError as error:
-            print(f"~{chars:>5} chars (~{chars // 4:>4} tok): FAILED "
-                  f"{type(error).__name__}: {error!r}")
-            break
-        elapsed = time.monotonic() - start
-        status = response.status_code
-        print(
-            f"~{chars:>5} chars (~{chars // 4:>4} tok): status {status}  {elapsed:.1f}s")
-        if status != 200:
-            print(f"  >> ceiling is below ~{chars} chars (~{chars // 4} tokens). "
-                  f"body: {response.text[:200]}")
-            break
+    """Plain vs JSON mode at increasing sizes. The plain ladder already passed to
+    8000 chars, so a length ceiling is ruled out — this isolates whether JSON mode
+    (response_format) is what 500s on the larger, structured RAG prompt."""
+    print("\n=== plain vs JSON mode at increasing sizes ===")
+    system = (
+        "Extract fields. Output ONLY one JSON object with keys "
+        '"vendor" (string|null) and "total_amount" (number-string|null). No prose.'
+    )
+    modes = (
+        ("plain", {}),
+        ("json ", {"response_format": {"type": "json_object"}}),
+    )
+    for chars in (2000, 4000, 5000, 6000, 7000):
+        user = f"{_receipt_filler(chars)}\n\nAnswer:"
+        for label, extra in modes:
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                "temperature": 0,
+                "max_tokens": 200,
+                **extra,
+            }
+            start = time.monotonic()
+            try:
+                response = await client.post(url, json=payload)
+            except httpx.HTTPError as error:
+                print(f"~{chars:>5} chars  {label}: FAILED "
+                      f"{type(error).__name__}: {error!r}")
+                continue
+            elapsed = time.monotonic() - start
+            note = ""
+            if response.status_code != 200:
+                note = f"  body: {response.text[:160]}"
+            print(f"~{chars:>5} chars  {label}: status "
+                  f"{response.status_code}  {elapsed:.1f}s{note}")
 
 
 if __name__ == "__main__":
