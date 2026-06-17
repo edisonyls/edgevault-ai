@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     embedding_chunk_overlap: int = EMBEDDING_CHUNK_OVERLAP
     assistant_llm_enabled: bool = False
     assistant_llm_base_url: str = "http://localhost:8000/v1"
-    assistant_llm_model: str = "qwen2.5-instruct:1.5b"
+    assistant_llm_model: str = "llama3.2:3b"
     assistant_llm_timeout: float = 30.0
     assistant_llm_keep_warm: bool = True
     assistant_llm_keep_warm_interval: float = 240.0
