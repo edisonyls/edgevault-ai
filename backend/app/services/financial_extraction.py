@@ -159,23 +159,27 @@ def _parse_amount(raw: str) -> Decimal | None:
         return None
 
 
-# Detect the vendor and category based on known keywords, or heuristics if no known vendor is found.
-def _match_rules(
-    lowered: str,
-    rules: Sequence[VendorRule],
-) -> tuple[str, FinancialCategory] | None:
+# Detect the vendor by looking for the keywords from the extracted text
+def _detect_vendor(
+    text: str,
+    vendor_rules: Sequence[VendorRule] = (),
+) -> tuple[str | None, FinancialCategory | None]:
+    lowered = text.lower()
     best: tuple[int, str, FinancialCategory] | None = None
 
-    for keyword, vendor, category in rules:
+    for keyword, vendor, category in vendor_rules:
         match = re.search(rf"\b{re.escape(keyword)}\b", lowered)
         if match and (best is None or match.start() < best[0]):
             best = (match.start(), vendor, category)
 
+    # Known vendor is found in the text, return it immediately. (vendor, category)
     if best is not None:
         return best[1], best[2]
 
+    # If no exact keyword match is found, try collapsed matching to catch
+    # condensed domains or emails
     collapsed = re.sub(r"\s+", "", lowered)
-    for keyword, vendor, category in rules:
+    for keyword, vendor, category in vendor_rules:
         token = re.sub(r"\s+", "", keyword)
         if " " not in keyword or len(token) < MIN_COLLAPSED_KEYWORD_LENGTH:
             continue
@@ -183,7 +187,10 @@ def _match_rules(
         if idx != -1 and (best is None or idx < best[0]):
             best = (idx, vendor, category)
 
-    return (best[1], best[2]) if best is not None else None
+    if best is not None:
+        return best[1], best[2]
+
+    return _guess_vendor_from_header(text), None
 
 
 # Find the learned document type for a document, matching the same way vendor
@@ -217,20 +224,6 @@ def _resolve_document_type(
         return learned, "learned"
 
     return "receipt", "default"
-
-
-# Detect the vendor and category by matching the document against the known
-# vendor rules, then fall back to a header heuristic when none match.
-def _detect_vendor(
-    text: str,
-    rules: Sequence[VendorRule] = (),
-) -> tuple[str | None, FinancialCategory | None]:
-    lowered = text.lower()
-    matched = _match_rules(lowered, rules)
-    if matched is not None:
-        return matched
-
-    return _guess_vendor_from_header(text), None
 
 
 # If no known brand is detected, guess the vendor from the first meaningful line
@@ -432,15 +425,14 @@ def _score_confidence(result: ExtractedFinancials, vendor_is_known: bool) -> flo
     return round(min(score, 0.95), 2)
 
 
-# Turn the OCR text into structured financial fields using deterministic rules,
-# then persist them.
+# Turn the OCR text into structured financial fields using deterministic rules
 def extract_financials(
     text: str,
-    rules: Sequence[VendorRule] = (),
+    vendor_rules: Sequence[VendorRule] = (),
     document_type_rules: Sequence[DocumentTypeRule] = (),
 ) -> ExtractedFinancials:
     lines = text.splitlines()
-    vendor, category = _detect_vendor(text, rules)
+    vendor, category = _detect_vendor(text, vendor_rules)
     vendor_is_known = category is not None
     # The document's own wording is the source of truth.
     document_type, document_type_source = _resolve_document_type(
@@ -513,25 +505,27 @@ class FinancialRecordService:
         self.correction_repository = correction_repository
         self.document_type_rule_repository = document_type_rule_repository
 
+    # Get all the vendor rules
     async def _load_vendor_rules(self) -> list[VendorRule]:
         rows = await self.vendor_rule_repository.list_all()
         return [(row["keyword"], row["vendor"], row["category"]) for row in rows]
 
+    # Get all the document type rules
     async def _load_document_type_rules(self) -> list[DocumentTypeRule]:
         rows = await self.document_type_rule_repository.list_all()
         return [(row["keyword"], row["document_type"]) for row in rows]
 
     # Run the rules engine over OCR text and persist the structured record.
     async def extract_and_store(self, *, upload_id: UUID, text: str | None) -> None:
-        """
-        Run the rules engine over OCR text and persist the structured record.
-        """
         if not text or not text.strip():
             return
 
-        rules = await self._load_vendor_rules()
+        vendor_rules = await self._load_vendor_rules()
+
         document_type_rules = await self._load_document_type_rules()
-        extracted = extract_financials(text, rules, document_type_rules)
+
+        extracted = extract_financials(text, vendor_rules, document_type_rules)
+
         await self.repository.upsert_from_extraction(
             upload_id=upload_id,
             document_type=extracted.document_type,

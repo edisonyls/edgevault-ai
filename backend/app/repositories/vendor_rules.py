@@ -17,8 +17,7 @@ class VendorRuleRepository:
         self.database_pool = database_pool
         self.workspace_id = workspace_id
 
-    # List every learned vendor rule, most recently updated first so the
-    # freshest correction wins when two rules share a match position.
+    # List every learned vendor rule
     async def list_all(self) -> list[Record]:
         async with self.database_pool.acquire() as connection:
             return await connection.fetch(

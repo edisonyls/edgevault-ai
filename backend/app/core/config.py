@@ -15,11 +15,13 @@ Environment = Literal["local", "development", "staging", "production"]
 UPLOAD_STORAGE_DIR = Path("var/uploads")
 AUTH_SESSION_COOKIE_NAME = "edgevault_ai_session"
 AUTH_COOKIE_SAMESITE = "lax"
+EMBEDDING_PROVIDER = "fastembed"
 
 # Database pool sizes
 DATABASE_POOL_MIN_SIZE = 1
 DATABASE_POOL_MAX_SIZE = 5
-
+# We expect at least 20 extracted text characters per page before trusting the
+# PDF’s built-in text layer.
 OCR_PDF_TEXT_THRESHOLD = 20
 OCR_PDF_RENDER_DPI = 200
 EMBEDDING_DIMENSION = 384
@@ -50,13 +52,11 @@ class Settings(BaseSettings):
     database_pool_min_size: int = DATABASE_POOL_MIN_SIZE
     database_pool_max_size: int = DATABASE_POOL_MAX_SIZE
     upload_storage_dir: Path = UPLOAD_STORAGE_DIR
-    ocr_enabled: bool = True
     ocr_engine: str = "tesseract"
-    ocr_language: str = "eng"
     ocr_pdf_text_threshold: int = OCR_PDF_TEXT_THRESHOLD
     ocr_pdf_render_dpi: int = OCR_PDF_RENDER_DPI
     embeddings_enabled: bool = True
-    embedding_provider: str = "fastembed"
+    embedding_provider: str = EMBEDDING_PROVIDER
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dimension: int = EMBEDDING_DIMENSION
     embedding_chunk_size: int = EMBEDDING_CHUNK_SIZE

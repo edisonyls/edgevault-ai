@@ -34,6 +34,7 @@ class UploadRepository:
         self.database_pool = database_pool
         self.workspace_id = workspace_id
 
+    # Create a new upload metadata in the DB
     async def create(
         self,
         *,
@@ -75,6 +76,7 @@ class UploadRepository:
 
             raise UniqueDisplayFilenameError from exc
 
+    # List upload metadata from the DB with optional status filtering and pagination
     async def list(
         self,
         *,
@@ -108,6 +110,7 @@ class UploadRepository:
                 *values,
             )
 
+    # Get an upload metadata by ID from the DB
     async def get(self, upload_id: UUID) -> Record | None:
         async with self.database_pool.acquire() as connection:
             return await connection.fetchrow(
@@ -122,6 +125,7 @@ class UploadRepository:
                 self.workspace_id,
             )
 
+    # Update an existing upload metadata in the DB
     async def update(
         self,
         upload_id: UUID,
@@ -158,6 +162,7 @@ class UploadRepository:
 
             raise UniqueDisplayFilenameError from exc
 
+    # Delete an upload metadata from the DB
     async def delete(self, upload_id: UUID) -> bool:
         async with self.database_pool.acquire() as connection:
             result = await connection.execute(
