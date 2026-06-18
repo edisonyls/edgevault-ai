@@ -28,15 +28,12 @@ def get_search_service(
     settings: Annotated[Settings, Depends(get_settings)],
     workspace: CurrentWorkspaceDep,
 ) -> SearchService:
-    embedding_service: EmbeddingService | None = None
-    if settings.embeddings_enabled:
-        embedding_service = EmbeddingService(
-            repository=DocumentEmbeddingRepository(
-                database_pool, workspace.id),
-            model=get_embedding_model(settings),
-            chunk_size=settings.embedding_chunk_size,
-            chunk_overlap=settings.embedding_chunk_overlap,
-        )
+    embedding_service = EmbeddingService(
+        repository=DocumentEmbeddingRepository(database_pool, workspace.id),
+        model=get_embedding_model(settings),
+        chunk_size=settings.embedding_chunk_size,
+        chunk_overlap=settings.embedding_chunk_overlap,
+    )
 
     return SearchService(SearchRepository(database_pool, workspace.id), embedding_service)
 
