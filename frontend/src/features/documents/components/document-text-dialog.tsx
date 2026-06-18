@@ -107,7 +107,9 @@ export function DocumentTextDialog({
           <FinancialRecordPanel
             uploadId={doc.id}
             isProcessing={
-              doc.status === "Processing" || doc.status === "Indexing"
+              doc.status === "Processing" ||
+              doc.status === "Extracting" ||
+              doc.status === "Indexing"
             }
             onSaved={onRecordSaved}
           />
@@ -133,7 +135,7 @@ export function DocumentTextDialog({
 }
 
 function DocumentTextBody({ document: doc }: { document: VaultDocument }) {
-  if (doc.status === "Processing") {
+  if (doc.status === "Processing" || doc.status === "Extracting") {
     return (
       <Typography.Paragraph className="text-sm text-slate-500">
         Text extraction is still in progress. This view will update once it

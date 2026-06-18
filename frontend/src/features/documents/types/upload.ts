@@ -1,6 +1,6 @@
 export type UploadStatus =
   | "uploaded"
-  | "processing"
+  | "extracting"
   | "indexing"
   | "processed"
   | "failed";
