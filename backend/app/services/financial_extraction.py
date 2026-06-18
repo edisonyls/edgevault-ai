@@ -198,8 +198,8 @@ def _detect_vendor(
             continue
         if _parse_dates_in(candidate) or AMOUNT_RE.search(candidate):
             continue
-        return candidate[:MAX_VENDOR_GUESS_LENGTH]
-    return None
+        return candidate[:MAX_VENDOR_GUESS_LENGTH], None
+    return None, None
 
 
 # Decide the document type and record how it was decided.
