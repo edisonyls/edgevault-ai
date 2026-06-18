@@ -109,12 +109,15 @@ _NEGATED_UNPAID_RE = re.compile(
 
 # "unpaid" / "due" / "owe" -> outstanding bills. Also drives forward-looking
 # month inference, since these questions are about upcoming due dates.
+# Whole-word matching is essential here: a substring "due"/"owe" would fire on
+# unrelated words, and matching is kept off the negated form via the guard above.
+_UNPAID_RE = re.compile(r"\b(?:unpaid|overdue|outstanding|due|owe|owing)\b")
+
+
 def _is_unpaid(lowered: str) -> bool:
     if _NEGATED_UNPAID_RE.search(lowered):
         return False
-    return any(word in lowered for word in ("unpaid", "overdue", "outstanding")) or bool(
-        re.search(r"\b(due|owe|owing)\b", lowered)
-    )
+    return bool(_UNPAID_RE.search(lowered))
 
 
 def _parse_period(
@@ -130,6 +133,12 @@ def _parse_period(
         start, end = _month_bounds(today.year, today.month)
         return start, end, "this month"
 
+    if "next month" in lowered:
+        year = today.year if today.month < 12 else today.year + 1
+        month = today.month + 1 if today.month < 12 else 1
+        start, end = _month_bounds(year, month)
+        return start, end, "next month"
+
     if "year to date" in lowered or "ytd" in lowered:
         return date(today.year, 1, 1), today, "year to date"
 
@@ -139,6 +148,10 @@ def _parse_period(
 
     if "this year" in lowered:
         return date(today.year, 1, 1), date(today.year, 12, 31), str(today.year)
+
+    if "next year" in lowered:
+        year = today.year + 1
+        return date(year, 1, 1), date(year, 12, 31), str(year)
 
     if "today" in lowered:
         return today, today, "today"
@@ -150,6 +163,13 @@ def _parse_period(
                 month, today, prefer_future)
             start, end = _month_bounds(year, month)
             return start, end, f"{calendar.month_name[month]} {year}"
+
+    # A bare year with no month, e.g. "in 2025" or "spending for 2024". Checked
+    # after months so "July 2026" still resolves to the month, not the whole year.
+    year_match = YEAR_RE.search(lowered)
+    if year_match:
+        year = int(year_match[1])
+        return date(year, 1, 1), date(year, 12, 31), str(year)
 
     return None, None, ALL_TIME
 
@@ -166,15 +186,13 @@ def match_category(lowered: str) -> str | None:
 
 
 # Words signalling "the single biggest", e.g. "what do I spend the most on".
-_SUPERLATIVES = ("most", "highest", "biggest", "largest", "top")
+# Whole-word: "top" must not fire on "laptop", "largest" on unrelated text, etc.
+_SUPERLATIVE_RE = re.compile(r"\b(?:most|highest|biggest|largest|top)\b")
+_TOP_SPEND_RE = re.compile(r"\b(?:spend|spent|spending|expenses?|costs?)\b")
 
 
 def _wants_top(lowered: str) -> bool:
-    spend_terms = ("spend", "spent", "spending",
-                   "expense", "expenses", "cost", "costs")
-    return any(word in lowered for word in _SUPERLATIVES) and any(
-        word in lowered for word in spend_terms
-    )
+    return bool(_SUPERLATIVE_RE.search(lowered)) and bool(_TOP_SPEND_RE.search(lowered))
 
 
 # "vendors" / "merchants" / "who do I pay" -> list the businesses on record.
@@ -185,9 +203,8 @@ _VENDOR_LIST_RE = re.compile(
 
 def _wants_top_vendor(lowered: str) -> bool:
     """A superlative aimed at vendors, e.g. "which vendor do I pay the most"."""
-    return bool(_VENDOR_LIST_RE.search(lowered)) and any(
-        word in lowered for word in _SUPERLATIVES
-    )
+    return bool(_VENDOR_LIST_RE.search(lowered)) and bool(_SUPERLATIVE_RE.search(lowered))
+
 
 # "how many invoices / documents / receipts do I have" -> a document count.
 # Deliberately excludes "bills" so unpaid-bill questions still route to unpaid.
@@ -197,11 +214,16 @@ _DOC_COUNT_RE = re.compile(
 )
 
 # Generic spend words that, absent a specific category, mean "all spending".
+# Matched whole-word so "pay" does not fire on "paying" and "paid" on "unpaid",
+# which previously mis-routed subscription/negated-bill questions to a summary.
 _SPEND_TERMS = (
     "spend", "spent", "spending", "cost", "costs",
     "expense", "expenses", "paid", "pay",
 )
 _TOTAL_TERMS = ("total", "overall", "altogether", "in all")
+_SPEND_OVERVIEW_RE = re.compile(
+    r"\b(?:" + "|".join((*_SPEND_TERMS, *_TOTAL_TERMS)) + r")\b"
+)
 
 
 def _wants_vendor_list(lowered: str) -> bool:
@@ -214,9 +236,7 @@ def _wants_document_count(lowered: str) -> bool:
 
 def _wants_spend_overview(lowered: str) -> bool:
     """A general 'how much / total / overall spending' question, no category named."""
-    return any(term in lowered for term in _SPEND_TERMS) or any(
-        term in lowered for term in _TOTAL_TERMS
-    )
+    return bool(_SPEND_OVERVIEW_RE.search(lowered))
 
 
 def build_intent(
