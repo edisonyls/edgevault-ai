@@ -6,8 +6,6 @@ import { Link, Surface } from "@heroui/react";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { WorkspaceHeader } from "@/components/layout/workspace-header";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { DocumentChat } from "@/features/chat/components/document-chat";
-import { useDocumentChat } from "@/features/chat/hooks/use-document-chat";
 import { useDocuments } from "../hooks/use-documents";
 import type { DocumentTypeFilter, VaultDocument } from "../types/document";
 import { DocumentList } from "./document-list";
@@ -37,8 +35,6 @@ export function DocumentWorkspace() {
     null,
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const chat = useDocumentChat();
 
   const filteredDocuments = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -189,10 +185,7 @@ export function DocumentWorkspace() {
             failedCount={failedCount}
           />
 
-          <Surface
-            variant="transparent"
-            className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1fr)_420px]"
-          >
+          <Surface variant="transparent" className="flex min-h-0 flex-1">
             <DocumentList
               documents={filteredDocuments}
               totalDocuments={documents.length}
@@ -214,14 +207,6 @@ export function DocumentWorkspace() {
               onClearFilters={clearFilters}
               onPickFiles={openFilePicker}
               isUploading={isUploading}
-            />
-
-            <DocumentChat
-              messages={chat.messages}
-              input={chat.input}
-              isSending={chat.isSending}
-              onInputChange={chat.setInput}
-              onSubmit={chat.submit}
             />
           </Surface>
         </Surface>

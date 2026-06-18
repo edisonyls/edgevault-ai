@@ -1,7 +1,13 @@
 "use client";
 
 import { Link } from "@heroui/react";
-import { FileText, LayoutDashboard, Search, Tags } from "lucide-react";
+import {
+  FileText,
+  LayoutDashboard,
+  MessageSquare,
+  Search,
+  Tags,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 
@@ -15,6 +21,7 @@ const tabs: TabItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Documents", href: "/", icon: FileText },
   { label: "Search", href: "/search", icon: Search },
+  { label: "AI chat", href: "/chat", icon: MessageSquare },
   { label: "Vendors", href: "/vendors", icon: Tags },
 ];
 

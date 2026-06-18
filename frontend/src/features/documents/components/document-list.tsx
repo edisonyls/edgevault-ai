@@ -67,7 +67,7 @@ export function DocumentList({
     <Surface
       render={(props) => <section {...props} />}
       id="documents"
-      className="min-w-0 border-b border-slate-200 bg-[#f7f8fb] px-5 py-5 sm:px-6 lg:px-8 xl:border-b-0 xl:border-r"
+      className="w-full min-w-0 flex-1 bg-[#f7f8fb] px-5 py-5 sm:px-6 lg:px-8"
     >
       <Surface
         variant="transparent"

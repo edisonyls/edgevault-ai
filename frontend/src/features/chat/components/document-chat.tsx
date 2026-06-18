@@ -46,7 +46,7 @@ export function DocumentChat({
   return (
     <Surface
       render={(props) => <aside {...props} />}
-      className="flex min-h-[480px] flex-col bg-white px-5 py-5 sm:px-6 lg:min-h-[620px] lg:px-8 xl:px-6"
+      className="flex min-h-120 w-full flex-1 flex-col bg-white px-5 py-5 sm:px-6 lg:min-h-155 lg:px-8 xl:px-6"
     >
       <Surface variant="transparent">
         <Typography.Heading
