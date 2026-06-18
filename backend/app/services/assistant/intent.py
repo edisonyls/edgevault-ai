@@ -99,19 +99,25 @@ def _infer_year(month: int, today: date, prefer_future: bool) -> int:
     return today.year if month <= today.month else today.year - 1
 
 
+# Signals an outstanding obligation: status words ("unpaid", "due") plus the
+# "to pay" / "pay off" phrasings, which read as bills owed rather than spend
+# already made — without this, "bills to pay" is grabbed by the spend-overview
+# rule on the bare word "pay".
+_UNPAID_TERMS = r"unpaid|overdue|outstanding|due|owe|owing|to pay|pay off"
+
 # "not unpaid" / "nothing overdue" etc. — a negated bill question shouldn't be
 # treated as a request for outstanding bills.
 _NEGATED_UNPAID_RE = re.compile(
     r"\b(?:not|never|aren't|isn't|don't|no)\b[^.?!]{0,20}"
-    r"\b(?:unpaid|overdue|outstanding|due|owe|owing)\b"
+    rf"\b(?:{_UNPAID_TERMS})\b"
 )
 
 
-# "unpaid" / "due" / "owe" -> outstanding bills. Also drives forward-looking
-# month inference, since these questions are about upcoming due dates.
+# "unpaid" / "due" / "owe" / "to pay" -> outstanding bills. Also drives
+# forward-looking month inference, since these are about upcoming due dates.
 # Whole-word matching is essential here: a substring "due"/"owe" would fire on
 # unrelated words, and matching is kept off the negated form via the guard above.
-_UNPAID_RE = re.compile(r"\b(?:unpaid|overdue|outstanding|due|owe|owing)\b")
+_UNPAID_RE = re.compile(rf"\b(?:{_UNPAID_TERMS})\b")
 
 
 def _is_unpaid(lowered: str) -> bool:
