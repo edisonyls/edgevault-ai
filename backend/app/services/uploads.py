@@ -192,7 +192,6 @@ class UploadService:
         file_path = build_file_path(stored_filename)
         mime_type = file.content_type or DEFAULT_MIME_TYPE
         file_saved = False
-        created_row: Record | None = None
 
         try:
             # Save the uploaded file to disk and get the size.

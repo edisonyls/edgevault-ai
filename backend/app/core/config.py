@@ -55,7 +55,6 @@ class Settings(BaseSettings):
     ocr_engine: str = "tesseract"
     ocr_pdf_text_threshold: int = OCR_PDF_TEXT_THRESHOLD
     ocr_pdf_render_dpi: int = OCR_PDF_RENDER_DPI
-    embeddings_enabled: bool = True
     embedding_provider: str = EMBEDDING_PROVIDER
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     embedding_dimension: int = EMBEDDING_DIMENSION

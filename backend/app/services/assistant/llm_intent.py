@@ -55,7 +55,7 @@ Q: "what's my total spending?" -> {"query_type":"spending_summary","category":nu
 Q: "any bills I haven't paid?" -> {"query_type":"unpaid_bills","category":null}
 Q: "am I wasting money on streaming services?" -> {"query_type":"subscriptions","category":null}
 Q: "give me a rundown of my spending" -> {"query_type":"spending_summary","category":null}
-Q: "which company takes the largest slice of my wallet?" -> {"query_type":"top_vendor","category":null}
+Q: "who takes the biggest slice of my wallet?" -> {"query_type":"top_vendor","category":null}
 Q: "who do I buy from?" -> {"query_type":"vendor_list","category":null}
 Q: "how many receipts have I uploaded?" -> {"query_type":"document_count","category":null}
 Q: "what's the capital of France?" -> {"query_type":"unknown","category":null}"""

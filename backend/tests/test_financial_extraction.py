@@ -14,8 +14,8 @@ the layout reproduces two failure modes seen on real trust-account receipts:
 from decimal import Decimal
 
 from app.services.financial_extraction import (
-    _detect_vendor,
     _detect_total,
+    _detect_vendor,
     _pick_stacked_amount,
     extract_financials,
 )

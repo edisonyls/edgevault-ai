@@ -170,7 +170,6 @@ def raise_upload_http_exception(exc: UploadServiceError) -> NoReturn:
 async def create_upload_metadata(
     upload_service: UploadServiceDep,
     extraction_service: DocumentExtractionServiceDep,
-    settings: SettingsDep,
     background_tasks: BackgroundTasks,
     file: Annotated[UploadFile, File()],
 ) -> UploadMetadataResponse:
