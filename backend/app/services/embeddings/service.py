@@ -37,25 +37,26 @@ class EmbeddingService:
 
     # Chunk, embed, and persist the embeddings for one document's OCR text.
     async def embed_and_store(self, *, upload_id: UUID, text: str | None) -> int:
+        # If there is no text to embed, just return
         if not text or not text.strip():
-            await self.repository.replace_for_upload(
-                upload_id=upload_id,
-                embedding_model=self.model.name,
-                chunks=[],
-            )
             return 0
 
+        # Chunk the text
         chunks = chunk_text(
             text,
             size=self.chunk_size,
             overlap=self.chunk_overlap,
         )
+
+        # Embed each chunk in a worker thread
         vectors = await asyncio.to_thread(self.model.embed, chunks)
 
         rows = [
             (index, content, vector)
             for index, (content, vector) in enumerate(zip(chunks, vectors, strict=True))
         ]
+
+        # Store the embeddings in the database.
         await self.repository.replace_for_upload(
             upload_id=upload_id,
             embedding_model=self.model.name,

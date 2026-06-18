@@ -135,14 +135,15 @@ class DocumentExtractionService:
                 logger.exception(
                     "Financial extraction failed for upload %s", upload_id)
 
-            if self.embedding_service is not None:
-                try:
-                    await self.embedding_service.embed_and_store(
-                        upload_id=upload_id, text=outcome.text
-                    )
-                except Exception:
-                    logger.exception(
-                        "Embedding generation failed for upload %s", upload_id)
+            # Generate embeddings for the OCR text and persist them in the
+            # database
+            try:
+                await self.embedding_service.embed_and_store(
+                    upload_id=upload_id, text=outcome.text
+                )
+            except Exception:
+                logger.exception(
+                    "Embedding generation failed for upload %s", upload_id)
 
             # Update upload status to 'processed' after all post-processing is done.
             await self._set_status(upload_id, "processed")
