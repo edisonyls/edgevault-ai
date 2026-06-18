@@ -1,5 +1,4 @@
 import logging
-
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -7,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 class ChatCompletionClient:
     """
-    Minimal async client for OpenAI-compatible ``/chat/completions`` endpoints.
+    A small async client for talking to an OpenAI-compatible chat completions API.
     """
 
     def __init__(
@@ -16,7 +15,7 @@ class ChatCompletionClient:
         base_url: str,
         model: str,
         api_key: str | None = None,
-        timeout: float = 30.0,
+        timeout: float,
         extra_params: dict[str, object] | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")

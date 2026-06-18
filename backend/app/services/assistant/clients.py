@@ -2,10 +2,8 @@ from app.core.config import Settings
 from app.services.assistant.llm_client import ChatCompletionClient
 
 
+# Initialize the local assistant LLM client
 def build_local_client(settings: Settings) -> ChatCompletionClient | None:
-    """Tier 2: the local model on the Hailo NPU (hailo-ollama)."""
-    if not settings.assistant_llm_enabled:
-        return None
     return ChatCompletionClient(
         base_url=settings.assistant_llm_base_url,
         model=settings.assistant_llm_model,

@@ -12,16 +12,20 @@ from app.core.database import close_database_pool, create_database_pool
 from app.services.assistant.clients import build_local_client
 from app.services.assistant.warmup import keep_model_warm
 
-# Gives the app one shared DB pool and guarantees both are cleaned up on shutdown.
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
+
+    # It creates one shared async Postgres pool at startup
     app.state.database_pool = await create_database_pool(settings)
 
     warm_task: asyncio.Task[None] | None = None
+
+    # Initialize the LOCAL llm client and keep it warm
     local_client = build_local_client(settings)
+
+    # Ping the local
     if local_client is not None and settings.assistant_llm_keep_warm:
         warm_task = asyncio.create_task(
             keep_model_warm(
@@ -31,6 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        # cleans up background resources on shutdown
         if warm_task is not None:
             warm_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -57,10 +62,6 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(api_router, prefix=settings.api_prefix)
-
-    @app.get("/", include_in_schema=False)
-    async def root() -> dict[str, str]:
-        return {"service": settings.app_name}
 
     return app
 
