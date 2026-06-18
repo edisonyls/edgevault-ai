@@ -44,24 +44,25 @@ class AuthConfigurationError(RuntimeError):
     pass
 
 
+# Encode the session payload
 def _b64encode(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
 
 
+# Decode the session payload
 def _b64decode(value: str) -> bytes:
     padding = "=" * (-len(value) % 4)
     return base64.urlsafe_b64decode(f"{value}{padding}".encode("ascii"))
 
 
+# Get the session secret
 def _session_secret(settings: Settings) -> str:
     if settings.auth_session_secret:
         return settings.auth_session_secret
-    if settings.environment == "production":
-        raise AuthConfigurationError(
-            "AUTH_SESSION_SECRET must be set in production.")
-    return "edgevault-local-development-session-secret"
+    raise AuthConfigurationError("AUTH_SESSION_SECRET must be set.")
 
 
+# Get the password configured for the given workspace
 def configured_password(settings: Settings, workspace_key: WorkspaceKey) -> str:
     password = (
         settings.auth_owner_password
@@ -70,12 +71,11 @@ def configured_password(settings: Settings, workspace_key: WorkspaceKey) -> str:
     )
     if password:
         return password
-    if settings.environment == "production":
-        env_name = "AUTH_OWNER_PASSWORD" if workspace_key == "owner" else "AUTH_DEMO_PASSWORD"
-        raise AuthConfigurationError(f"{env_name} must be set in production.")
-    return "owner-local" if workspace_key == "owner" else "demo-local"
+    env_name = "AUTH_OWNER_PASSWORD" if workspace_key == "owner" else "AUTH_DEMO_PASSWORD"
+    raise AuthConfigurationError(f"{env_name} must be set.")
 
 
+# Verify the provided password
 def verify_workspace_password(
     settings: Settings,
     workspace_key: WorkspaceKey,
@@ -85,6 +85,7 @@ def verify_workspace_password(
     return secrets.compare_digest(candidate, expected)
 
 
+# Create a session token for the given workspace and return it in a secure cookie.
 def create_session_token(
     settings: Settings,
     workspace: WorkspaceContext,
@@ -96,8 +97,11 @@ def create_session_token(
         "iat": issued_at,
         "exp": issued_at + settings.auth_session_ttl_seconds,
     }
+    # turns a Python dict into JSON bytes
     payload_bytes = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    # encodes the payload
     encoded_payload = _b64encode(payload_bytes)
+    # creates an HMAC signature using the session secret
     signature = hmac.new(
         _session_secret(settings).encode("utf-8"),
         encoded_payload.encode("ascii"),
@@ -106,6 +110,8 @@ def create_session_token(
     return f"{encoded_payload}.{_b64encode(signature)}"
 
 
+# Parse and validate the session token from the cookie, returning the workspace
+# context if valid.
 def parse_session_token(settings: Settings, token: str) -> WorkspaceContext | None:
     try:
         encoded_payload, encoded_signature = token.split(".", 1)
@@ -132,6 +138,8 @@ def parse_session_token(settings: Settings, token: str) -> WorkspaceContext | No
         return None
 
 
+# Reads the session cookie, validates the token, and returns either a
+# WorkspaceContext or None
 def get_optional_workspace(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
@@ -142,6 +150,7 @@ def get_optional_workspace(
     return parse_session_token(settings, token)
 
 
+# Depends on the optional one, and if there's no workspace, raise 401
 def get_current_workspace(
     workspace: Annotated[WorkspaceContext | None, Depends(get_optional_workspace)],
 ) -> WorkspaceContext:

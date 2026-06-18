@@ -8,9 +8,12 @@ from app.core.config import Settings
 
 
 async def _init_connection(connection: asyncpg.Connection) -> None:
+    # Registers the vector type on each new connection, so the connection understands
+    # pgvector embeddings.
     await register_vector(connection)
 
 
+# Creates one shared async Postgres pool.
 async def create_database_pool(settings: Settings) -> asyncpg.Pool:
     return await asyncpg.create_pool(
         dsn=settings.database_url,

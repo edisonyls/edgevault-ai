@@ -11,6 +11,7 @@ from app.repositories.uploads import UniqueDisplayFilenameError, UploadRepositor
 from app.schemas.uploads import UploadMetadataResponse, UploadMetadataUpdate, UploadStatus
 
 MAX_FILENAME_LENGTH = 255
+# This is the IANA/RFC-defined meaning of "arbitrary bytes of unknown type."
 DEFAULT_MIME_TYPE = "application/octet-stream"
 MAX_DISPLAY_FILENAME_ATTEMPTS = 10_000
 UPLOAD_READ_CHUNK_SIZE = 1024 * 1024
@@ -36,6 +37,7 @@ class UploadStorageError(UploadServiceError):
     pass
 
 
+# Clean and validate the original filename.
 def clean_original_filename(filename: str | None) -> str:
     if filename is None:
         raise UploadValidationError("Uploaded file must include a filename.")
@@ -51,6 +53,7 @@ def clean_original_filename(filename: str | None) -> str:
     return clean_filename
 
 
+# Clean and validate the display filename.
 def clean_display_filename(filename: str | None) -> str:
     if filename is None:
         raise UploadValidationError("Display filename cannot be null.")
@@ -67,11 +70,13 @@ def clean_display_filename(filename: str | None) -> str:
     return clean_filename
 
 
+# Build a unique stored filename using a UUID and the original file extension
 def build_stored_filename(original_filename: str) -> str:
     suffix = PurePath(original_filename).suffix[:32]
     return f"{uuid4()}{suffix}"
 
 
+# Build the file path for storing the uploaded file using a date_based directory structure
 def build_file_path(stored_filename: str) -> str:
     now = datetime.now(UTC)
     return PurePosixPath(
@@ -82,6 +87,7 @@ def build_file_path(stored_filename: str) -> str:
     ).as_posix()
 
 
+# Build the display filename and add a suffix if found a duplicate
 def build_display_filename(original_filename: str, duplicate_index: int) -> str:
     if duplicate_index == 0:
         return original_filename
@@ -99,6 +105,7 @@ def build_display_filename(original_filename: str, duplicate_index: int) -> str:
     return f"{stem[:max_stem_length]}{suffix}{extension}"
 
 
+# Convert a DB record to the upload metadata response model
 def row_to_upload_metadata(row: Record) -> UploadMetadataResponse:
     return UploadMetadataResponse(
         id=row["id"],
@@ -120,8 +127,7 @@ class UploadService:
         self.upload_repository = upload_repository
         self.upload_storage_dir = upload_storage_dir
 
-    # Resolve the storage path for a given file path, ensuring it is within the
-    # upload storage directory.
+    # Resolve the storage path for a given file path
     def resolve_storage_path(self, file_path: str) -> Path:
         relative_path = PurePosixPath(file_path)
 
@@ -130,6 +136,8 @@ class UploadService:
 
         return self.upload_storage_dir.joinpath(*relative_path.parts)
 
+    # Save the uploaded file to disk at the resolved storage path and return the
+    # file size.
     async def save_uploaded_file(self, file: UploadFile, file_path: str) -> int:
         storage_path = self.resolve_storage_path(file_path)
         temp_path = storage_path.with_name(
@@ -141,6 +149,8 @@ class UploadService:
             await asyncio.to_thread(storage_path.parent.mkdir, parents=True, exist_ok=True)
             handle = await asyncio.to_thread(temp_path.open, "xb")
 
+            # Streams the uploaded file to disk in fixed-size byte blocks instead
+            # of loading the whole thing into memory at once.
             while chunk := await file.read(UPLOAD_READ_CHUNK_SIZE):
                 file_size += len(chunk)
                 await asyncio.to_thread(handle.write, chunk)
@@ -171,6 +181,7 @@ class UploadService:
         except OSError as exc:
             raise UploadStorageError("Unable to delete stored file.") from exc
 
+    # Create a new upload metadata in the DB and save the file to disk
     async def create_upload(
         self,
         *,
@@ -184,6 +195,7 @@ class UploadService:
         created_row: Record | None = None
 
         try:
+            # Save the uploaded file to disk and get the size.
             file_size = await self.save_uploaded_file(file, file_path)
             file_saved = True
 
@@ -192,6 +204,7 @@ class UploadService:
                     original_filename, duplicate_index)
 
                 try:
+                    # Create the uploaded file's metadata in the DB
                     row = await self.upload_repository.create(
                         original_filename=original_filename,
                         display_filename=display_filename,
@@ -200,12 +213,11 @@ class UploadService:
                         mime_type=mime_type,
                         file_size=file_size,
                     )
-                    created_row = row
                     break
                 except UniqueDisplayFilenameError:
                     continue
 
-            if created_row is None:
+            if row is None:
                 raise UploadConflictError(
                     "Unable to generate a unique display filename.")
         except Exception:
@@ -214,7 +226,7 @@ class UploadService:
                     await self.delete_stored_file(file_path)
             raise
 
-        return row_to_upload_metadata(created_row)
+        return row_to_upload_metadata(row)
 
     async def list_upload_metadata(
         self,
@@ -229,16 +241,6 @@ class UploadService:
             offset=offset,
         )
         return [row_to_upload_metadata(row) for row in rows]
-
-    # Mark the upload as processing and return the updated metadata.
-    async def mark_processing(self, upload_id: UUID) -> UploadMetadataResponse:
-        # Update the upload status to "processing" and return the updated metadata.
-        row = await self.upload_repository.update(upload_id, {"status": "processing"})
-
-        if row is None:
-            raise UploadNotFoundError("Upload not found.")
-
-        return row_to_upload_metadata(row)
 
     async def get_upload_metadata(self, upload_id: UUID) -> UploadMetadataResponse:
         row = await self.upload_repository.get(upload_id)

@@ -20,6 +20,7 @@ type OptionalWorkspaceDep = Annotated[
 ]
 
 
+# return the workspace info once the user is authenticated
 def _workspace_response(workspace: WorkspaceContext) -> WorkspaceResponse:
     return WorkspaceResponse(
         key=workspace.key,
@@ -28,6 +29,7 @@ def _workspace_response(workspace: WorkspaceContext) -> WorkspaceResponse:
     )
 
 
+# Set a secure session cookie if the verification is passed.
 def _set_session_cookie(
     response: Response,
     settings: Settings,
@@ -45,6 +47,7 @@ def _set_session_cookie(
     )
 
 
+# Check if the user has a valid session cookie and return the session info.
 @router.get("/session", response_model=SessionResponse)
 async def get_session(workspace: OptionalWorkspaceDep) -> SessionResponse:
     if workspace is None:
@@ -55,19 +58,22 @@ async def get_session(workspace: OptionalWorkspaceDep) -> SessionResponse:
     )
 
 
+# Logging the user in
 @router.post("/login", response_model=SessionResponse)
 async def login(
     payload: LoginRequest,
     response: Response,
     settings: SettingsDep,
 ) -> SessionResponse:
+    # Verify if the password is correct for the requested workspace.
     if not verify_workspace_password(settings, payload.workspace, payload.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid workspace password.",
         )
-
     workspace = WORKSPACES[payload.workspace]
+
+    # Create a session token and set it in a secure cookie.
     _set_session_cookie(response, settings, workspace)
     return SessionResponse(
         authenticated=True,
@@ -75,6 +81,7 @@ async def login(
     )
 
 
+# Logging the user out by clearing the session cookie.
 @router.post("/logout", response_model=SessionResponse)
 async def logout(response: Response, settings: SettingsDep) -> SessionResponse:
     secure_cookie = settings.auth_cookie_secure or settings.environment == "production"

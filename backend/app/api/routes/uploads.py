@@ -1,3 +1,4 @@
+import json
 from typing import Annotated, NoReturn
 from uuid import UUID
 
@@ -8,13 +9,16 @@ from fastapi import (
     File,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
+from sse_starlette.sse import EventSourceResponse
 
 from app.core.auth import CurrentWorkspaceDep
 from app.core.config import Settings, get_settings
 from app.core.database import DatabasePoolDep
+from app.core.events import UploadEventBus, get_upload_event_bus
 from app.repositories.document_embeddings import DocumentEmbeddingRepository
 from app.repositories.document_extractions import DocumentExtractionRepository
 from app.repositories.document_type_rules import DocumentTypeRuleRepository
@@ -48,11 +52,18 @@ from app.services.uploads import (
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
 MAX_UPLOAD_LIST_LIMIT = 500
-
+OCR_LANGUAGE = "eng"
 
 type SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
+# Get the OCR engine
+def get_ocr_engine() -> OcrEngine:
+    # Currently using the Tesseract engine but in the future we will swap to Hailo
+    return TesseractEngine(language=OCR_LANGUAGE)
+
+
+# Get the upload service
 def get_upload_service(
     database_pool: DatabasePoolDep,
     settings: SettingsDep,
@@ -67,11 +78,7 @@ def get_upload_service(
 type UploadServiceDep = Annotated[UploadService, Depends(get_upload_service)]
 
 
-def get_ocr_engine(settings: SettingsDep) -> OcrEngine:
-    # Currently using the Tesseract engine but in the future we will swap to Hailo
-    return TesseractEngine(language=settings.ocr_language)
-
-
+# Get the financial record service
 def get_financial_record_service(
     database_pool: DatabasePoolDep,
     workspace: CurrentWorkspaceDep,
@@ -115,6 +122,8 @@ def get_document_extraction_service(
         pdf_text_threshold=settings.ocr_pdf_text_threshold,
         pdf_render_dpi=settings.ocr_pdf_render_dpi,
         embedding_service=embedding_service,
+        event_bus=get_upload_event_bus(),
+        workspace_id=workspace.id,
     )
 
 
@@ -123,6 +132,7 @@ type DocumentExtractionServiceDep = Annotated[
 ]
 
 
+# Helper function to raise appropriate HTTP exceptions based on upload service errors
 def raise_upload_http_exception(exc: UploadServiceError) -> NoReturn:
     if isinstance(exc, UploadValidationError):
         raise HTTPException(
@@ -154,6 +164,7 @@ def raise_upload_http_exception(exc: UploadServiceError) -> NoReturn:
     ) from exc
 
 
+# Create a new upload metadata in the DB and save the file to disk
 @router.post(
     "",
     response_model=UploadMetadataResponse,
@@ -167,14 +178,8 @@ async def create_upload_metadata(
     file: Annotated[UploadFile, File()],
 ) -> UploadMetadataResponse:
     try:
-        # First create the upload metadata and store the file
+        # Create the upload metadata and store the file.
         upload = await upload_service.create_upload(file=file)
-
-        if not settings.ocr_enabled or upload.file_path is None:
-            return upload
-
-        # Mark the upload as processing.
-        upload = await upload_service.mark_processing(upload.id)
 
         # Resolve the storage path for the uploaded file.
         storage_path = upload_service.resolve_storage_path(upload.file_path)
@@ -204,6 +209,34 @@ async def list_upload_metadata(
         limit=limit,
         offset=offset,
     )
+
+
+# Stream upload status changes to the client over Server-Sent Events so the UI
+# updates in real time instead of polling.
+@router.get("/events")
+async def stream_upload_events(
+    request: Request,
+    workspace: CurrentWorkspaceDep,
+    event_bus: Annotated[UploadEventBus, Depends(get_upload_event_bus)],
+) -> EventSourceResponse:
+    queue = event_bus.subscribe(workspace.id)
+
+    async def event_generator():
+        try:
+            while True:
+                event = await queue.get()
+                yield {
+                    "event": "upload-status",
+                    "data": json.dumps(
+                        {"id": str(event.upload_id), "status": event.status}
+                    ),
+                }
+        finally:
+            # Runs when the client disconnects and sse-starlette closes the
+            # generator, so we never leak subscriber queues.
+            event_bus.unsubscribe(workspace.id, queue)
+
+    return EventSourceResponse(event_generator())
 
 
 @router.get("/{upload_id}", response_model=UploadMetadataResponse)

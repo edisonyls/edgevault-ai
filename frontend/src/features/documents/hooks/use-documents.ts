@@ -6,7 +6,8 @@ import {
   updateUploadMetadata,
   uploadDocumentFile,
 } from "../api/uploads";
-import { mapUploadToDocument } from "../lib/document-utils";
+import { subscribeToUploadEvents } from "../api/upload-events";
+import { mapUploadStatus, mapUploadToDocument } from "../lib/document-utils";
 import type { VaultDocument } from "../types/document";
 import type { FinancialRecord } from "../types/financial-record";
 import type { UploadMetadataResponse } from "../types/upload";
@@ -43,10 +44,6 @@ async function loadVaultDocuments(
     mapUploadToDocument(upload, recordsByUpload.get(upload.id) ?? null),
   );
 }
-
-// How often to re-poll the uploads list while any document is still being processed
-// Set to 2.5s
-const PROCESSING_POLL_INTERVAL_MS = 2500;
 
 export function useDocuments(): UseDocuments {
   const [documents, setDocuments] = useState<VaultDocument[]>([]);
@@ -95,28 +92,29 @@ export function useDocuments(): UseDocuments {
     }
   }, []);
 
-  // Keep polling while any document is still moving through the pipeline so the
-  //  list reflects the final 'processed'/'failed' state.
-  const hasProcessing = documents.some(
-    (document) =>
-      document.status === "Processing" || document.status === "Indexing",
-  );
-
+  // Subscribe to real-time status changes pushed by the backend over SSE
   useEffect(() => {
-    if (!hasProcessing) {
-      return;
-    }
+    const unsubscribe = subscribeToUploadEvents((event) => {
+      const status = mapUploadStatus(event.status);
 
-    const controller = new AbortController();
-    const interval = setInterval(() => {
-      void refresh(controller.signal);
-    }, PROCESSING_POLL_INTERVAL_MS);
+      let isKnown = false;
+      setDocuments((current) =>
+        current.map((document) => {
+          if (document.id !== event.id) {
+            return document;
+          }
+          isKnown = true;
+          return { ...document, status };
+        }),
+      );
 
-    return () => {
-      controller.abort();
-      clearInterval(interval);
-    };
-  }, [hasProcessing, refresh]);
+      if (!isKnown || status === "Indexing" || status === "Ready") {
+        void refresh();
+      }
+    });
+
+    return unsubscribe;
+  }, [refresh]);
 
   const clearError = useCallback(() => setError(null), []);
 

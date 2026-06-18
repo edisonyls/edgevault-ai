@@ -61,6 +61,11 @@ class TesseractEngine:
         if current_words:
             lines.append(" ".join(current_words))
 
-        mean_confidence = sum(confidences) / \
-            len(confidences) if confidences else None
-        return OcrPageResult(text="\n".join(lines), confidence=mean_confidence)
+        mean_confidence = (
+            sum(confidences) / len(confidences) if confidences else None
+        )
+        return OcrPageResult(
+            text="\n".join(lines),
+            confidence=mean_confidence,
+            word_count=len(confidences),
+        )

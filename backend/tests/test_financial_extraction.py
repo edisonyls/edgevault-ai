@@ -14,8 +14,8 @@ the layout reproduces two failure modes seen on real trust-account receipts:
 from decimal import Decimal
 
 from app.services.financial_extraction import (
+    _detect_vendor,
     _detect_total,
-    _match_rules,
     _pick_stacked_amount,
     extract_financials,
 )
@@ -114,7 +114,7 @@ def test_pick_stacked_amount_prefers_symboled_max():
 
 
 def test_vendor_matches_spaced_name_in_body():
-    assert _match_rules("principal: bayside realty group pty ltd", VENDOR_RULES) == (
+    assert _detect_vendor("principal: bayside realty group pty ltd", VENDOR_RULES) == (
         "Bayside Realty",
         "other",
     )
@@ -122,7 +122,7 @@ def test_vendor_matches_spaced_name_in_body():
 
 def test_vendor_matches_condensed_domain_when_spaced_name_absent():
     """The invoice bug: name survives only in 'baysiderealty.com.au'."""
-    assert _match_rules("see accounts@baysiderealty.com.au", VENDOR_RULES) == (
+    assert _detect_vendor("see accounts@baysiderealty.com.au", VENDOR_RULES) == (
         "Bayside Realty",
         "other",
     )
@@ -131,11 +131,17 @@ def test_vendor_matches_condensed_domain_when_spaced_name_absent():
 def test_single_word_keyword_does_not_collapse_match_substring():
     """A one-word keyword must not spuriously match a longer word."""
     rules = [("amazon", "Amazon", "shopping")]
-    assert _match_rules("paid via amazonbasics cable", rules) is None
+    assert _detect_vendor("paid via amazonbasics cable", rules) != (
+        "Amazon",
+        "shopping",
+    )
 
 
-def test_no_rule_match_returns_none():
-    assert _match_rules("totally unrelated text", VENDOR_RULES) is None
+def test_no_rule_match_falls_back_to_header_guess():
+    assert _detect_vendor("totally unrelated text", VENDOR_RULES) == (
+        "totally unrelated text",
+        None,
+    )
 
 
 # --- end-to-end on a full receipt-shaped document ---------------------------

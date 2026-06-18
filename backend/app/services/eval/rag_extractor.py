@@ -120,7 +120,7 @@ class RagExtractor:
         return asyncio.run(self.extract_async(text))
 
     async def extract_async(self, text: str) -> dict[str, object]:
-        neighbours = await self._retrieve(text)
+        neighbours = await self.retrieve(text)
         system, user = self._build_prompt(text, neighbours)
         content = await self._llm.complete(system=system, user=user)
         if content is None:
@@ -134,7 +134,11 @@ class RagExtractor:
             return self._empty_snapshot()
         return self._coerce_snapshot(parsed)
 
-    async def _retrieve(self, text: str) -> list[LabelledExample]:
+    async def retrieve(
+        self, text: str, top_k: int | None = None
+    ) -> list[LabelledExample]:
+        """Nearest corrected docs to `text`, leave-one-out. Public so focused
+        single-field extractors (e.g. the document_type classifier) can reuse it."""
         if not self._examples:
             return []
         vector = await asyncio.to_thread(self._model.embed, [text.strip()])
@@ -148,7 +152,7 @@ class RagExtractor:
 
         async with self._pool.acquire() as connection:
             rows = await connection.fetch(
-                _NEIGHBOUR_SQL, vector[0], candidate_ids, exclude, self._top_k
+                _NEIGHBOUR_SQL, vector[0], candidate_ids, exclude, top_k or self._top_k
             )
         return [
             self._by_upload[row["upload_id"]]

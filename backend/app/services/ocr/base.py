@@ -6,10 +6,12 @@ from PIL.Image import Image
 
 @dataclass(slots=True)
 class OcrPageResult:
-    """Text and mean word confidence (0-100, None if unavailable) for one image."""
+    """Text and mean word confidence for one image.
+    """
 
     text: str
     confidence: float | None
+    word_count: int
 
 
 @runtime_checkable

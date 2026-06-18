@@ -100,7 +100,11 @@ export function mapUploadToDocument(
 }
 
 function defaultVendorLabel(status: DocumentStatus): string {
-  if (status === "Processing" || status === "Indexing") {
+  if (
+    status === "Processing" ||
+    status === "Extracting" ||
+    status === "Indexing"
+  ) {
     return "Extracting…";
   }
 
@@ -108,7 +112,11 @@ function defaultVendorLabel(status: DocumentStatus): string {
 }
 
 function defaultAmountLabel(status: DocumentStatus): string {
-  if (status === "Processing" || status === "Indexing") {
+  if (
+    status === "Processing" ||
+    status === "Extracting" ||
+    status === "Indexing"
+  ) {
     return "Pending";
   }
 
@@ -139,16 +147,17 @@ export function sumDetectedAmounts(documents: VaultDocument[]) {
     .reduce((sum, value) => sum + value, 0);
 }
 
-function mapUploadStatus(status: string): DocumentStatus {
+export function mapUploadStatus(status: string): DocumentStatus {
   switch (status.toLowerCase()) {
     case "processed":
       return "Ready";
+    case "extracting":
+      return "Extracting";
     case "indexing":
       return "Indexing";
     case "failed":
       return "Failed";
     case "uploaded":
-    case "processing":
     default:
       return "Processing";
   }
