@@ -21,8 +21,14 @@ Reply with ONLY a JSON object, no prose and no code fences:
 query_type is exactly one of:
 - "top_spending_category": which category they spent the most on. \
 e.g. "what do I spend most on", "biggest expense", "where does my money go"
+- "top_vendor": which single business, merchant, or company they spend the most with. \
+e.g. "which company takes the most of my money", "who do I pay the most", "biggest vendor"
 - "category_total": how much they spent in ONE specific category. Requires a category. \
 e.g. "how much on groceries", "total fuel costs"
+- "vendor_list": list the businesses, merchants, or companies they have records for. \
+e.g. "who do I pay", "list my vendors", "which companies do I buy from"
+- "document_count": how many documents, invoices, receipts, or records they have. \
+e.g. "how many invoices do I have", "number of receipts uploaded"
 - "unpaid_bills": bills not yet paid, owed, or coming due. \
 e.g. "what do I owe", "outstanding bills", "anything due soon"
 - "subscriptions": recurring or subscription payments. \
@@ -49,11 +55,17 @@ Q: "what's my total spending?" -> {"query_type":"spending_summary","category":nu
 Q: "any bills I haven't paid?" -> {"query_type":"unpaid_bills","category":null}
 Q: "am I wasting money on streaming services?" -> {"query_type":"subscriptions","category":null}
 Q: "give me a rundown of my spending" -> {"query_type":"spending_summary","category":null}
+Q: "which company takes the largest slice of my wallet?" -> {"query_type":"top_vendor","category":null}
+Q: "who do I buy from?" -> {"query_type":"vendor_list","category":null}
+Q: "how many receipts have I uploaded?" -> {"query_type":"document_count","category":null}
 Q: "what's the capital of France?" -> {"query_type":"unknown","category":null}"""
 
 _QUERY_TYPES: set[str] = {
     "top_spending_category",
+    "top_vendor",
     "category_total",
+    "vendor_list",
+    "document_count",
     "unpaid_bills",
     "subscriptions",
     "spending_summary",
