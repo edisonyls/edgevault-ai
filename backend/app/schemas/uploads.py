@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-UploadStatus = Literal["uploaded", "processing",
+UploadStatus = Literal["uploaded", "extracting",
                        "indexing", "processed", "failed"]
 
 
